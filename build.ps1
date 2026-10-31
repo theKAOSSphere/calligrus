@@ -6,7 +6,8 @@
 # C/C++ runtime are linked in statically (vcpkg triplet x64-windows-static),
 # and the fonts, themes and demo are embedded, so it runs without DLLs or an
 # assets folder.
-param([string]$Config = "Release", [string]$BuildDir = "build", [string]$Triplet = "x64-windows-static")
+param([string]$Config = "Release", [string]$BuildDir = "build", [string]$Triplet = "x64-windows-static",
+      [string]$Generator = "")
 $ErrorActionPreference = "Stop"
 
 # Find vcpkg: $env:VCPKG_ROOT first, then the usual install locations.
@@ -29,8 +30,20 @@ if ((Test-Path $cache) -and -not (Select-String -Path $cache -Pattern "^VCPKG_TA
     Remove-Item -Recurse -Force (Join-Path $build "CMakeFiles") -ErrorAction SilentlyContinue
 }
 
-# The Visual Studio generator finds MSVC by itself (no vcvars needed).
-cmake -S $src -B $build -G "Visual Studio 17 2022" -A x64 `
+# The Visual Studio generator finds MSVC by itself (no vcvars needed). Use the newest Visual Studio
+# that has the C++ tools (2022 = 17, 2026 = 18), unless -Generator names one.
+if (-not $Generator) {
+    $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+    $vsVersion = if (Test-Path $vswhere) {
+        & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationVersion
+    }
+    $Generator = switch -Wildcard ("$vsVersion") {
+        "18.*"  { "Visual Studio 18 2026" }
+        default { "Visual Studio 17 2022" }
+    }
+}
+Write-Host "Generator: $Generator"
+cmake -S $src -B $build -G $Generator -A x64 `
     "-DCMAKE_TOOLCHAIN_FILE=$vcpkg\scripts\buildsystems\vcpkg.cmake" `
     "-DVCPKG_TARGET_TRIPLET=$Triplet"
 if ($LASTEXITCODE) { exit $LASTEXITCODE }

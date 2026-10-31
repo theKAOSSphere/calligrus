@@ -13,3 +13,9 @@ tests/** -text
 *.otf binary
 *.pdf binary
 *.webp binary
+
+# GitHub's language statistics: the tree-sitter grammars are vendored upstream code (their generated
+# parser.c files would otherwise make the repository look like 97% C), and the test data is data.
+grammars/** linguist-vendored
+tests/** linguist-vendored
+spec/tests/** linguist-vendored

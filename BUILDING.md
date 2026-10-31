@@ -23,7 +23,7 @@ Needs a C/C++ compiler, CMake, Ninja (or make), git, curl, zip, unzip, tar, pkg-
 development packages GLFW builds against. On Ubuntu:
 
 ```sh
-sudo apt install build-essential cmake ninja-build git curl zip unzip tar pkg-config \
+sudo apt install build-essential cmake ninja-build git curl zip unzip tar pkg-config autoconf autoconf-archive automake libtool \
     libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl-dev \
     libxkbcommon-dev libwayland-dev libxext-dev
 ./build.sh                       # Release build in build/ ; output build/calligrus

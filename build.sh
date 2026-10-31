@@ -11,7 +11,7 @@
 # /opt/vcpkg, /usr/local/vcpkg and cloned into ~/vcpkg if missing.
 # Needs: a C/C++ compiler, cmake, ninja (or make), git, curl, zip, unzip, tar,
 # pkg-config, and the X11/GL dev packages GLFW builds against, e.g. on Ubuntu:
-#   sudo apt install build-essential cmake ninja-build git curl zip unzip tar pkg-config \
+#   sudo apt install build-essential cmake ninja-build git curl zip unzip tar pkg-config autoconf autoconf-archive automake libtool \
 #       libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl-dev \
 #       libxkbcommon-dev libwayland-dev libxext-dev
 set -euo pipefail
