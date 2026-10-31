@@ -2804,6 +2804,9 @@ int main() {
     ImGuiIO& io = ImGui::GetIO();
     io.IniFilename = nullptr;                   // don't litter imgui.ini next to the exe
     io.ConfigInputTextEnterKeepActive = true;   // the find field keeps focus after Enter
+    // Script mode: a scripted key is one deliberate press. On a slow machine (software OpenGL in CI) one
+    // frame can outlast ImGui's key-repeat delay, which turned a single press into two; so no auto-repeat.
+    if (g_script_mode) io.KeyRepeatDelay = 1.0e9f;
 
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");

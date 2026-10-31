@@ -15,8 +15,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Cache vcpkg binary packages
-        uses: actions/cache@v4
+      # Restore here, save right after the build (below): a failing test must not throw away the
+      # freshly built libraries (actions/cache would only save when the whole job succeeds).
+      - name: Restore vcpkg binary packages
+        id: vcpkg-cache
+        uses: actions/cache/restore@v4
         with:
           path: .vcpkg-cache
           key: vcpkg-windows-${{ hashFiles('vcpkg.json') }}
@@ -38,6 +41,13 @@ jobs:
       - name: Build (Release, MSVC, x64-windows-static)
         shell: pwsh
         run: .\build.ps1
+
+      - name: Save vcpkg binary packages
+        if: always() && steps.vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .vcpkg-cache
+          key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}
 
       - name: Run the console tests
         shell: pwsh
@@ -83,8 +93,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Cache vcpkg binary packages
-        uses: actions/cache@v4
+      # Restore here, save right after the build (below): a failing test must not throw away the
+      # freshly built libraries (actions/cache would only save when the whole job succeeds).
+      - name: Restore vcpkg binary packages
+        id: vcpkg-cache
+        uses: actions/cache/restore@v4
         with:
           path: .vcpkg-cache
           key: vcpkg-linux-${{ hashFiles('vcpkg.json') }}
@@ -110,6 +123,13 @@ jobs:
 
       - name: Build (Release)
         run: bash build.sh
+
+      - name: Save vcpkg binary packages
+        if: always() && steps.vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .vcpkg-cache
+          key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}
 
       - name: Run the console tests
         run: |
