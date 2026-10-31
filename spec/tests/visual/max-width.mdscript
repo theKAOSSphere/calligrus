@@ -1,0 +1,5 @@
+# config: config-narrow.toml
+# max_width = 500: the reading column stops at 500 pt, centred in a wide window.
+size 1000 500
+open text.md
+shot top.png

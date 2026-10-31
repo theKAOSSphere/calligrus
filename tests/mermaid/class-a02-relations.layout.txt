@@ -1,0 +1,25 @@
+size 405.8178 2136.6323
+node classA 8 23.99292 71.81862 91 hidden=false lines=["classA"] label=47.81862x17.850002
+node classB 197.27841 8 71.81862 91 hidden=false lines=["classB"] label=47.81862x17.850002
+node classC 120.52327 449.17578 71.81862 91 hidden=false lines=["classC"] label=47.81862x17.850002
+node classD 309.8017 580.88043 71.81862 91 hidden=false lines=["classD"] label=47.81862x17.850002
+node classE 120.52327 712.5853 71.81862 91 hidden=false lines=["classE"] label=47.81862x17.850002
+node classF 309.8017 844.2899 71.81862 91 hidden=false lines=["classF"] label=47.81862x17.850002
+node classG 120.52327 975.9946 71.81862 91 hidden=false lines=["classG"] label=47.81862x17.850002
+node classH 309.8017 1107.6992 71.81862 91 hidden=false lines=["classH"] label=47.81862x17.850002
+node classI 120.52327 1239.4039 71.81862 91 hidden=false lines=["classI"] label=47.81862x17.850002
+node classJ 309.8017 1371.1086 71.81862 91 hidden=false lines=["classJ"] label=47.81862x17.850002
+node classK 120.52327 1502.8135 71.81862 91 hidden=false lines=["classK"] label=47.81862x17.850002
+node classL 301.60422 1634.5181 71.81862 91 hidden=false lines=["classL"] label=47.81862x17.850002
+node classM 8 2027.885 71.81862 91 hidden=false lines=["classM"] label=47.81862x17.850002
+node classN 197.27841 2029.6322 71.81862 91 hidden=false lines=["classN"] label=47.81862x17.850002
+node classO 120.52327 1766.2229 71.81862 91 hidden=false lines=["classO"] label=47.81862x17.850002
+node classP 317.99918 1897.9275 71.81862 91 hidden=false lines=["classP"] label=47.81862x17.850002
+edge classA->classB (79.81862,69.49292) (79.81862,85.91925) (197.27841,85.91925) (197.27841,70.5) anchor=Some((138.04498, 85.91925))
+edge classC->classD (192.34189,510.67578) (192.34189,610.38043) (309.8017,610.38043) anchor=Some((201.21947, 610.38043))
+edge classE->classF (192.34189,774.0853) (192.34189,873.7899) (309.8017,873.7899) anchor=Some((201.21947, 873.7899))
+edge classG->classH (192.34189,1037.4946) (192.34189,1137.1992) (304.8017,1137.1992) anchor=Some((198.71948, 1137.1992))
+edge classI->classJ (192.34189,1300.9039) (192.34189,1400.6086) (309.8017,1400.6086) anchor=Some((201.21947, 1400.6086))
+edge classK->classL (192.34189,1564.3135) (192.34189,1664.0181) (296.60422,1664.0181) anchor=Some((194.62073, 1664.0181))
+edge classM->classN (79.81862,2073.385) (79.81862,2098.6814) (197.27841,2098.6814) (197.27841,2092.1323) anchor=Some((129.1749, 2098.6814))
+edge classO->classP (192.34189,1827.7229) (192.34189,1927.4275) (317.99918,1927.4275) anchor=Some((205.3182, 1927.4275))

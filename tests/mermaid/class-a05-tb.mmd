@@ -1,0 +1,14 @@
+classDiagram
+    class BankAccount
+    BankAccount : +String owner
+    BankAccount : +BigDecimal balance
+    BankAccount : +deposit(amount) bool
+    BankAccount : +withdrawal(amount) int
+    BankAccount : -audit() void
+    class Savings
+    Savings : +rate float
+    BankAccount <|-- Savings
+    BankAccount <|-- Checking
+    Checking : +overdraft int
+    Customer --> BankAccount : owns
+    Customer : +name

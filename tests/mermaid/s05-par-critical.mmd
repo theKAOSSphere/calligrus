@@ -1,0 +1,17 @@
+sequenceDiagram
+    participant A
+    participant B
+    participant C
+    par first
+        A->>B: one
+    and second
+        A->>C: two
+    end
+    critical establish
+        B->>C: connect
+    option timeout
+        B-->>A: retry
+    end
+    break stop
+        A->>B: halt
+    end

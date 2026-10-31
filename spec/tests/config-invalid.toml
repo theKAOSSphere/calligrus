@@ -1,0 +1,24 @@
+# Wrong types, out-of-range numbers, unknown keys. Every bad key falls back to
+# its default on its own; the good keys in the same file still apply.
+theme = 5                    # wrong type (integer)        -> "auto"
+dark_theme = ""              # empty string               -> "calligrus-dark"
+light_theme = "leuven"       # valid
+zoom = 3.5                   # out of range (0.5 .. 3.0)  -> 1.0 (NOT clamped to 3.0)
+body_size = 11               # out of range (12 .. 28)    -> 16 (NOT clamped to 12)
+max_width = 860.0            # a float                    -> 860 (the default; whole numbers only)
+show_outline = "no"          # wrong type (string)        -> true
+vim_keys = 0                 # wrong type (integer)       -> true
+Zoom = 2.0                   # unknown key (keys are case-sensitive): ignored
+colour = "blue"              # unknown key: ignored
+
+[fonts]
+prose = 42                   # wrong type                 -> ""
+prose_bold = ["a.ttf"]       # wrong type (array)         -> ""
+mono = "C:/fonts/Hack.ttf"   # valid
+size = 14                    # unknown key in a known table: ignored
+
+[code]
+line_numbers = "true"        # wrong type (string)        -> false
+
+[extra]                      # unknown table: ignored
+anything = 1

@@ -1,0 +1,12 @@
+size 900 700
+open pauses.md
+keys f5
+shot step1.png
+keys right
+shot step2.png
+keys right
+shot step3.png
+keys right
+shot slide2.png
+keys left
+shot back.png

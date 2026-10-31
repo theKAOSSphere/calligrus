@@ -1,0 +1,12 @@
+# Configuration for the README screenshot (docs/screenshot/hero.mdscript).
+theme = "bearded-vivid-black"
+zoom = 1.0
+body_size = 16
+show_outline = true
+vim_keys = true
+remember_window = false
+# Bundled fonts only, so the picture is the same on every machine.
+system_fallback = false
+
+[code]
+line_numbers = false

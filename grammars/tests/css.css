@@ -1,0 +1,18 @@
+@import url("base.css");
+
+:root {
+  --accent: #ff8800;
+}
+
+/* Buttons */
+.button,
+a.button:hover {
+  color: var(--accent);
+  margin: 0 auto 1.5rem;
+  transition: opacity 200ms ease-in-out;
+  font-family: "Fira Code", monospace !important;
+}
+
+@media (max-width: 600px) {
+  #nav > li::before { content: "\2022"; }
+}

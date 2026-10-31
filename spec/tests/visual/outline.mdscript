@@ -1,0 +1,7 @@
+size 900 700
+open headings.md
+shot hidden.png
+keys o
+shot shown.png
+keys o
+shot hidden-again.png

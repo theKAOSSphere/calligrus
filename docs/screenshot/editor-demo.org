@@ -1,0 +1,29 @@
+#+TITLE: Pendulum lab log
+#+STARTUP: showall
+
+* Model
+For small swings the period barely depends on the amplitude $\theta_0$:
+
+\[ T \approx 2\pi \sqrt{\frac{L}{g}} \left( 1 + \frac{\theta_0^2}{16} \right) \]
+
+* Runs
+| Run | Length $L$ (m) | Amplitude | Period $T$ (s) | Notes                                                                                   |
+|-----+----------------+-----------+----------------+-----------------------------------------------------------------------------------------|
+|   1 |          0.500 | 5°        |          1.419 | Clean release from the stop; timed 20 swings with the photogate and averaged them       |
+|   2 |          0.500 | 20°       |          1.431 | Slightly longer, as the amplitude correction predicts; string stretched a little at the end |
+|   3 |          1.000 | 5°        |          2.007 | Ratio to run 1 is $\approx\sqrt{2}$, so $T \propto \sqrt{L}$ holds within the timing error  |
+|   4 |          1.000 | 30°       |          2.040 | Visible damping after 15 swings; only the first 10 swings used for the average            |
+
+* Analysis
+#+begin_src cpp
+auto period(double L, double theta0) -> double {
+    constexpr double g = 9.81;
+    const double t0 = 2.0 * std::numbers::pi * std::sqrt(L / g);
+    return t0 * (1.0 + theta0 * theta0 / 16.0);   // => only for small swings
+}
+#+end_src
+
+* TODO Next steps
+- [X] Repeat run 4 with a heavier bob
+- [ ] Fit $g$ from all runs
+- [ ] Write up the damping

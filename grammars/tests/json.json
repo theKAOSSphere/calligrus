@@ -1,0 +1,8 @@
+{
+  "name": "viewer",
+  "version": "0.1.0",
+  "private": true,
+  "tags": ["markdown", "viewer", null],
+  "size": 12.5e3,
+  "nested": { "escaped": "line\nbreak \"quoted\"" }
+}

@@ -1,0 +1,10 @@
+size 1057.9746 75
+node A 8 8 115.78839 51 hidden=false lines=["x² + y₁"] label=55.788387x21
+node B 173.78839 8 171.57678 51 hidden=false lines=["(a)/(b) + √(c)"] label=111.576775x21
+node C 395.36517 8 211.42561 51 hidden=false lines=["energy E = mc² here"] label=151.42561x21
+node D 656.7908 8 115.78839 51 hidden=false lines=["α + β π"] label=55.788387x21
+node E 822.57916 8 219.39539 51 hidden=false lines=["open $$ never closed"] label=159.39539x21
+edge A->B (123.78839,33.5) (173.78839,33.5) anchor=None
+edge B->C (345.36517,33.5) (395.36517,33.5) anchor=None
+edge C->D (606.7908,33.5) (656.7908,33.5) anchor=None
+edge D->E (772.57916,33.5) (822.57916,33.5) anchor=None

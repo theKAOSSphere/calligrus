@@ -1,0 +1,17 @@
+# Editor search highlight (spec 17), headless.
+size 900 600
+editor {"type": "open", "doc": "s", "path": "", "text": "# Search test\n\nRust is fun. rust is also fun, and RUST is loud.\n\n- Item with Rust inside\n- another rUsT variant\n\n```rust\nfn main() { println!(\"rust\"); }\n```\n"}
+editor {"type": "search", "doc": "s", "text": "rust", "case": false}
+shot editor/search-1-insensitive.png
+editor {"type": "text", "doc": "s", "text": "# Search test\n\nAn inserted line with Rust in it.\n\nRust is fun. rust is also fun, and RUST is loud.\n\n- Item with Rust inside\n- another rUsT variant\n\n```rust\nfn main() { println!(\"rust\"); }\n```\n"}
+shot editor/search-2-after-text.png
+editor {"type": "search", "doc": "s", "text": "Rust", "case": true}
+shot editor/search-3-case-sensitive.png
+keys ctrl+f
+type fun
+shot editor/search-4-find-bar-takes-over.png
+keys esc
+shot editor/search-5-bar-closed-editor-search-back.png
+editor {"type": "search", "doc": "s", "text": "", "case": false}
+shot editor/search-6-cleared.png
+editor {"type":"quit"}

@@ -1,0 +1,3 @@
+size 900 700
+open ../visual/org.org
+sync-dump org/sync.tsv

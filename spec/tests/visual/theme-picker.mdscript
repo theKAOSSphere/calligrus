@@ -1,0 +1,21 @@
+# The `t` theme picker (spec 6): `t` opens the toolbar's theme dropdown, j / k (Down / Up) move the
+# highlight and the page previews it live (nothing is saved), Enter keeps it, Esc puts the old theme
+# back. No key reaches the document: every shot shows the top of the page.
+size 900 600
+open pages.md
+settle
+keys t
+settle
+keys j down
+settle
+shot preview.png
+keys esc
+settle
+shot reverted.png
+keys t
+settle
+keys j
+settle
+keys enter
+settle
+shot kept.png

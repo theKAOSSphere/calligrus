@@ -1,0 +1,19 @@
+# calligrus configuration: comments, blank lines and odd spacing
+
+
+   # an indented comment
+# zoom = 2.5     <- commented out, must be ignored
+
+theme="gruvbox-dark"#no spaces at all
+	zoom   =    1.2      # tab-indented, wide spacing
+body_size= 18
+"vim_keys" = false         # a quoted key is the same key as vim_keys
+
+show_outline = true # explicitly the default
+[ fonts ]   # spaces inside the brackets are allowed by TOML
+	mono = "C:/fonts/mono#1.ttf"   # '#' inside a string is not a comment
+
+# prose = "should-not-be-read.ttf"
+
+[code]
+line_numbers = true

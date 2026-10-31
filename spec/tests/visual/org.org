@@ -1,0 +1,64 @@
+#+TITLE: Org sample
+#+AUTHOR: hidden
+#+OPTIONS: toc:nil
+
+Intro with *bold*, /italic/, +strike+, =verbatim=, ~code~, _under_ and a [[https://example.com][link]].
+A bare URL https://orgmode.org and math $e^{i\pi}+1=0$ and \(a^2+b^2\).
+
+* TODO First heading                                              :work:urgent:
+  SCHEDULED: <2026-10-09 Thu>
+  :PROPERTIES:
+  :ID: abc
+  :END:
+Text under it.\
+Hard break above. Jump to [[*Second heading][the second heading]].
+
+** Lists
+- one
+- two
+  - nested /two-a/
+  - [X] done task
+  - [ ] open task
+- term :: its description
+1. first
+2. second
+
+** Blocks
+#+BEGIN_SRC rust
+fn main() {
+    println!("hi");
+}
+#+END_SRC
+
+#+begin_quote
+Quoted *text*.
+#+end_quote
+
+#+BEGIN_NOTE
+A note callout.
+#+END_NOTE
+
+: fixed width
+: lines
+
+# a comment line
+\[
+\int_0^1 x^2\,dx = \frac{1}{3}
+\]
+
+\begin{align}
+a &= b + c \
+d &= e
+\end{align}
+
+* Second heading
+| Name  | Value |
+|-------+-------|
+| alpha |     1 |
+| beta  |    22 |
+
+-----
+
+Footnote here[fn:1].
+
+[fn:1] The footnote text.

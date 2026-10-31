@@ -1,0 +1,8 @@
+sequenceDiagram
+    actor U as User
+    participant S as Server
+    Note over U,S: Session starts
+    U->>S: login
+    Note right of S: checks credentials
+    S-->>U: token
+    Note left of U: stores token

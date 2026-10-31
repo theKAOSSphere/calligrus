@@ -1,0 +1,12 @@
+# The visual suite config with a narrow reading column (max_width, spec 3).
+theme = "calligrus-light"
+zoom = 1.0
+body_size = 16
+max_width = 500
+show_outline = false
+vim_keys = true
+remember_window = false
+editor_marker = true
+
+[code]
+line_numbers = false

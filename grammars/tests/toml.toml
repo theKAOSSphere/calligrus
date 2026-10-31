@@ -1,0 +1,16 @@
+# Cargo manifest
+[package]
+name = "calligrus"
+version = "0.1.0"
+edition = 2024
+authors = ["Someone <a@b.c>"]
+
+[dependencies]
+egui = { version = "0.36", default-features = false }
+tree-sitter.workspace = true
+
+[[bin]]
+name = 'viewer'
+test = false
+released = 1979-05-27T07:32:00Z
+ratio = 0.75

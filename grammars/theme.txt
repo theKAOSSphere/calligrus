@@ -1,0 +1,77 @@
+# calligrus syntax-highlighting theme: capture name -> dark colour, light colour, bold/italic.
+#
+# One line per capture name used in the highlights.scm queries:
+#
+#     capture-name     dark-colour   light-colour   [bold] [italic]
+#
+# A capture such as `function.method.call` uses the longest name listed here
+# that it starts with (`function.method`, then `function`). A colour of `-`
+# means "plain text": the capture still claims its text (so no other pattern
+# colours it), but no span is emitted. Captures with no entry at all are
+# ignored, exactly as if the pattern didn't exist.
+#
+# Palette: dark is base16-ocean.dark, light is close to InspiredGitHub. Bold/italic are passed on to the app.
+
+# --- comments ---------------------------------------------------------------
+comment                     #65737e  #969896  italic
+
+# --- keywords and operators ---------------------------------------------------
+keyword                     #b48ead  #a71d5d  bold
+conditional                 #b48ead  #a71d5d  bold
+repeat                      #b48ead  #a71d5d  bold
+preproc                     #b48ead  #a71d5d  bold
+operator                    -        -
+punctuation                 -        -
+delimiter                   -        -
+punctuation.special         #96b5b4  #0086b3
+special                     #96b5b4  #a71d5d
+
+# --- literals -----------------------------------------------------------------
+string                      #a3be8c  #183691
+string.special              #96b5b4  #0086b3
+string.special.key          #bf616a  #4b69c6
+string.escape               #96b5b4  #0086b3
+string.regexp               #96b5b4  #0086b3
+escape                      #96b5b4  #0086b3
+character                   #a3be8c  #183691
+number                      #d08770  #0086b3
+boolean                     #d08770  #0086b3
+constant                    #d08770  #0086b3
+constant.character          #a3be8c  #183691
+constant.character.escape   #96b5b4  #0086b3
+
+# --- functions and types --------------------------------------------------------
+function                    #8fa1b3  #795da3  bold
+method                      #8fa1b3  #795da3  bold
+function.builtin            #96b5b4  #62a35c
+type                        #ebcb8b  #445588  bold
+type.builtin                #b48ead  #a71d5d
+constructor                 #ebcb8b  #445588
+module                      #ebcb8b  #445588
+namespace                   #ebcb8b  #445588
+label                       #d08770  #0086b3
+
+# --- variables and properties ---------------------------------------------------
+variable                    -        -
+variable.builtin            #bf616a  #ed6a43
+variable.parameter          #d08770  #e36209
+parameter                   #d08770  #e36209
+variable.other.member       #bf616a  #4b69c6
+property                    #bf616a  #4b69c6
+field                       #bf616a  #4b69c6
+
+# --- markup (HTML / Markdown / LaTeX) -------------------------------------------
+tag                         #bf616a  #63a35c
+attribute                   #d08770  #795da3
+embedded                    -        -
+none                        -        -
+markup.heading              #8fa1b3  #1d3e81  bold
+text.title                  #8fa1b3  #1d3e81  bold
+markup.raw                  #a3be8c  #183691
+text.literal                #a3be8c  #183691
+markup.link.url             #96b5b4  #0086b3
+text.uri                    #96b5b4  #0086b3
+markup.link.label           #d08770  #795da3
+text.reference              #d08770  #795da3
+markup.italic               #c0c5ce  #333333  italic
+markup.bold                 #c0c5ce  #333333  bold

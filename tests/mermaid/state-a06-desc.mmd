@@ -1,0 +1,10 @@
+stateDiagram-v2
+    direction LR
+    s1 : This is a state description
+    s2 : Another one
+    state "Long name state" as s3
+    [*] --> s1
+    s1 --> s2 : go
+    s2 --> s3
+    s3 --> [*]
+    s2 : extra line

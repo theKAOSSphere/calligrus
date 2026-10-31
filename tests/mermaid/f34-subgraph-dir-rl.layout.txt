@@ -1,0 +1,14 @@
+size 659.43604 223.42
+node P 128.582 48.500004 68.484 51 hidden=false lines=["P"] label=8.484x21
+node Q 128.582 129.42 69.912 51 hidden=false lines=["Q"] label=9.912001x21
+node R 228.414 129.42 68.96 51 hidden=false lines=["R"] label=8.96x21
+node S 539.302 48.53949 68.134 51 hidden=false lines=["S"] label=8.134x21
+node T 441.37402 48.53949 68.008 51 hidden=false lines=["T"] label=8.008x21
+node X 8 88.9491 68.582 51 hidden=false lines=["X"] label=8.582001x21
+edge X->P (76.582,102.94154) (87.054,102.94154) (118.11,98.5) (128.582,98.5) anchor=None
+edge P->Q (163.18102,99.5) (163.18102,129.42) anchor=None
+edge P->R (197.066,98.5) (207.538,98.5) (217.942,130.42) (228.414,130.42) anchor=None
+edge S->T (539.302,74.03949) (509.38202,74.03949) anchor=None
+edge Q->S (197.494,129.42) (197.494,118.948) (540.302,110.01149) (540.302,99.53949) anchor=None
+sub "Vertical" 92.582 8 240.792 199.42
+sub "Backwards" 405.37402 8.03949 238.06201 118.5

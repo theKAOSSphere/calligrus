@@ -1,0 +1,7 @@
+size 585 360
+node A 0 0 10 360 hidden=false lines=["A"] label=10.2560005x24
+node B 287.5 60 10 300 hidden=false lines=["B"] label=10.448001x24
+node C 575 0 10 210 hidden=false lines=["C"] label=9.936001x24
+edge A->B (10,210) (287.5,210) anchor=None
+edge B->C (297.5,135) (575,135) anchor=None
+edge A->C (10,30) (575,30) anchor=None

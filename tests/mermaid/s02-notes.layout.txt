@@ -1,0 +1,5 @@
+size 550 416.19998
+node S 300 0 150 65 hidden=false lines=["Server"] label=54.64985x24
+node U 100 0 150 65 hidden=false lines=["User"] label=36.43323x24
+edge U->S (175,160.4) (375,160.4) anchor=Some((275.0, 143.59999))
+edge S->U (375,279.8) (175,279.8) anchor=Some((275.0, 263.0))

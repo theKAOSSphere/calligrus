@@ -1,0 +1,6 @@
+size 237.214 474
+node el1 48.107018 365 133 93 hidden=false lines=["<<Element>>", "el1", "Type: system"] label=95.63724x63
+node req1 39.87905 8 149.45586 135 hidden=false lines=["<<Requirement>>", "req1", "ID: 1", "Text: User logs in", "Risk: High"] label=143.45586x105
+node req2 8 197 213.214 114 hidden=false lines=["<<Functional Requirement>>", "req2", "ID: 2", "Text: System validates"] label=207.214x84
+edge req1->req2 (114.60698,143) (114.607,197) anchor=Some((114.606995, 170.0))
+edge req2->el1 (114.607,311) (114.60702,365) anchor=Some((114.60701, 338.0))

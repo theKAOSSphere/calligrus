@@ -1,0 +1,31 @@
+# Languages compiled into calligrus.
+#
+#     name   [alias ...]
+#
+# `name` is the grammar folder next to this file (with src/parser.c, maybe
+# src/scanner.c, highlights.scm and maybe injections.scm), and the C function
+# is `tree_sitter_<name>`. A code fence's info string (first word, lowercased)
+# is looked up among names and aliases. Both build scripts read this file, so
+# adding a language here (plus its folder) adds it to both apps.
+
+rust        rs
+c           h
+cpp         c++ cxx hpp h++ cc hh
+python      py python3
+javascript  js jsx mjs cjs
+typescript  ts
+tsx
+json        jsonc
+toml
+yaml        yml
+bash        sh shell zsh console
+powershell  ps1 pwsh
+lua
+elisp       emacs-lisp el
+markdown    md
+latex       tex
+cmake
+go          golang
+html        htm
+css
+autohotkey  ahk ahk2

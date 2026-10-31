@@ -1,0 +1,21 @@
+classDiagram
+    class A { +a1 +a2() }
+    class B { +b1 }
+    class C
+    class D { +d() }
+    class E
+    class F { +f1 +f2 +f3() }
+    class G
+    class H
+    A <|-- B
+    A <|-- C
+    B *-- D
+    C o-- E
+    D --> F : uses
+    E ..> G
+    F --> H
+    G --> A : back
+    H ..|> B
+    A -- F
+    B --> E : x
+    C --> D

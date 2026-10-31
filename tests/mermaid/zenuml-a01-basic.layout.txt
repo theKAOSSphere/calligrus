@@ -1,0 +1,9 @@
+size 550 401.5
+node Alice 0 0 150 65 hidden=false lines=["Alice"] label=45.54154x24
+node Bob 200 0 150 65 hidden=false lines=["Bob"] label=28.688002x24
+node Carol 400 0 150 65 hidden=false lines=["Carol"] label=45.54154x24
+edge Alice->Bob (75,111) (275,111) anchor=Some((175.0, 94.2))
+edge Bob->Alice (275,157) (75,157) anchor=Some((175.0, 140.2))
+edge Bob->Carol (275,222.5) (475,222.5) anchor=Some((375.0, 191.3))
+edge Carol->Alice (475,268.5) (75,268.5) anchor=Some((303.76794, 251.7))
+edge Alice->Alice (75,314.5) (110,314.5) (110,349.5) (75,349.5) anchor=Some((141.5, 320.49933))

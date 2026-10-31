@@ -1,0 +1,8 @@
+# config: config-outline.toml
+size 900 700
+open headings.md
+shot outline-top.png
+keys ] ]
+shot next-heading.png
+keys o
+shot outline-hidden.png

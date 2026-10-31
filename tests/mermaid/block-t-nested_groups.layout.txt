@@ -1,0 +1,9 @@
+size 270.33295 96.6
+node a 44.43323 8 39.108307 34.5 hidden=false lines=["a"] label=9.108308x24
+node b 148.9597 8 39.28 34.5 hidden=false lines=["b"] label=9.280001x24
+node c 217.22462 8 39.108307 34.5 hidden=false lines=["c"] label=9.108308x24
+node group1 8 48.1 111.97477 34.5 hidden=false lines=["Group One"] label=81.97477x24
+node group2 126.27477 48.1 84.64985 34.5 hidden=false lines=["group2"] label=54.64985x24
+node h 217.22462 48.1 39.108307 34.5 hidden=false lines=["h"] label=9.108308x24
+edge group1->h (63.987385,65.35) (236.77878,65.35) anchor=None
+edge group2->h (168.5997,65.35) (236.77878,65.35) anchor=None

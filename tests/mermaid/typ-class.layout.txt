@@ -1,0 +1,8 @@
+size 572.9598 322.35
+node Animal 207.03331 8 146.63724 131.1 hidden=false lines=["Animal", "---", "+String name", "+int age", "---", "+makeSound()"] label=95.63724x107.100006
+node Cat 8 189.1 146.63724 113.25001 hidden=false lines=["Cat", "---", "+bool indoor", "---", "+meow()"] label=95.63724x89.25001
+node Dog 402.35278 189.1 154.607 113.25001 hidden=false lines=["Dog", "---", "+String breed", "---", "+bark()"] label=103.607x89.25001
+node Owner 205.71555 193.1 146.63724 113.25001 hidden=false lines=["Owner", "---", "+String name", "---", "+feed()"] label=95.63724x89.25001
+edge Animal->Dog (344.29797,144.99266) (463.6563,189.1) anchor=None
+edge Animal->Cat (216.40973,145.00307) (97.31862,189.1) anchor=None
+edge Owner->Animal (279.03418,193.1) (280.22995,144.09851) anchor=Some((279.63208, 168.59926))

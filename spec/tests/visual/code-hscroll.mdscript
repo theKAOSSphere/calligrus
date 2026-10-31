@@ -1,0 +1,7 @@
+size 700 400
+open codelong.md
+shot overflow.png
+move 350 150
+shot hover.png
+drag 150 182 450 182
+shot scrolled.png

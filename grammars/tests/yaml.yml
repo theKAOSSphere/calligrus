@@ -1,0 +1,22 @@
+# CI workflow
+name: build
+on:
+  push:
+    branches: [main, "release/*"]
+env:
+  RUST_LOG: debug
+  RETRIES: 3
+  ENABLED: true
+  NOTHING: null
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test
+        run: |
+          cargo test --all
+          echo done
+anchors:
+  base: &base { a: 1 }
+  copy: *base

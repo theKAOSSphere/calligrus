@@ -1,0 +1,5 @@
+# Range bounds are inclusive; an integer zoom is accepted as a float.
+zoom = 3                     # integer -> 3.0 (valid, upper bound)
+body_size = 28               # upper bound, valid
+max_width = 2400             # upper bound, valid
+theme = "calligrus-light"

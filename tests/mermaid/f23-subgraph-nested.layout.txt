@@ -1,0 +1,10 @@
+size 193.08307 370.53824
+node A 58.054535 60.5 68.974 51 hidden=false lines=["A"] label=8.974x21
+node B 57.970535 135.5 69.142 51 hidden=false lines=["B"] label=9.142x21
+node C 58.194534 210.5 68.694 51 hidden=false lines=["C"] label=8.694x21
+node D 57.844536 303.53824 69.394 51 hidden=false lines=["D"] label=9.394x21
+edge A->B (92.541534,111.5) (92.541534,135.5) anchor=None
+edge B->C (92.541534,186.5) (92.541534,210.5) anchor=None
+edge C->D (92.541534,261.5) (92.541534,303.53824) anchor=None
+sub "Outer system" 8 8 169.08307 289.5
+sub "Inner part" 20 20 145.08307 202.5

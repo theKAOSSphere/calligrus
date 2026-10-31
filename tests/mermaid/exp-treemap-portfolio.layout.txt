@@ -1,0 +1,11 @@
+size 728 488
+node treemap_0 0 0 720 480 hidden=false lines=["Portfolio", "100"] label=81.97477x48
+node treemap_1 8 64 704 221.1 hidden=false lines=["Product A", "55"] label=81.97477x48
+node treemap_2 16 128 311.36365 149.1 hidden=false lines=["Feature A1", "25"] label=91.08308x48
+node treemap_3 330.36365 128 373.63638 149.1 hidden=false lines=["Feature A2", "30"] label=91.08308x48
+node treemap_4 8 288.1 704 120.600006 hidden=false lines=["Product B", "30"] label=81.97477x48
+node treemap_5 16 332.71002 228.33334 67.990005 hidden=false lines=["Feature B1", "10"] label=91.08308x48
+node treemap_6 247.33334 332.71002 456.6667 67.990005 hidden=false lines=["Feature B2", "20"] label=91.08308x48
+node treemap_7 8 411.7 704 60.300003 hidden=false lines=["Product C", "15"] label=81.97477x48
+node treemap_8 16 435.20502 365.33334 28.795002 hidden=false lines=[""] label=0x0
+node treemap_9 384.33334 435.20502 319.66666 28.795002 hidden=false lines=[""] label=0x0

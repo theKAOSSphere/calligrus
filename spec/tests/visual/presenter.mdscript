@@ -1,0 +1,10 @@
+size 900 700
+open presenter.md
+keys f5
+shot centred.png
+keys N
+shot notes.png
+keys right
+shot sizes-notes.png
+keys N
+shot sizes.png

@@ -1,0 +1,40 @@
+flowchart BT
+  N0((x 0))
+  N1(ok 1)
+  N2{{parse a long label here 2}}
+  N3([load 3])
+  N4(load 4)
+  N5[[ok 5]]
+  N6{{ok 6}}
+  N7{{retry 7}}
+  N8[retry 8]
+  N9(load 9)
+  subgraph S0 [Group 0]
+    N2
+    N4
+    N7
+    N0
+  end
+  subgraph S1 [Group 1]
+    N0
+    N8
+  end
+  N5 -.-> N0
+  N0 --- N4
+  N0 --x|load| N6
+  N2 --o N6
+  N5 --- N10
+  N7 --x N8
+  N2 --x N11
+  N0 -.->|x| N1
+  N8 --x N11
+  N1 --x N10
+  N9 --- N7
+  N10 --- N2
+  N11 --- N8
+  N1 -.-> N2
+  N6 --o|x| N1
+  N5 --o|ok| N7
+  N5 -.->|parse a long label here| N1
+  N7 <--> N3
+  N5 ---|validate input data| N3

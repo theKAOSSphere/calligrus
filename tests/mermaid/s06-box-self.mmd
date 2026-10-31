@@ -1,0 +1,12 @@
+sequenceDiagram
+    box Aqua Group
+    participant A
+    participant B
+    end
+    participant D as Database
+    participant Cache
+    A->>A: think
+    A->>B: ask
+    B->>D: query
+    D-->>B: rows
+    B->>Cache: store

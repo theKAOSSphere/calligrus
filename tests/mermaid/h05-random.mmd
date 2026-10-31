@@ -1,0 +1,29 @@
+flowchart TD
+  N0{{x 0}}
+  N1(done 1)
+  N2{{parse a long label here 2}}
+  N3([ok 3])
+  N8{{validate input data 8}}
+  N9(x 9)
+  N10{{x 10}}
+  N12{done 12}
+  N14{{validate input data 14}}
+  N12 --o N16
+  N15 -.-> N16
+  N16 -.-> N3
+  N9 --> N8
+  N15 --x N12
+  N0 --x|x| N6
+  N5 ==> N10
+  N14 --o N16
+  N1 --> N2
+  N11 --o|parse a long label here| N9
+  N11 --x N13
+  N3 --- N3
+  N13 -->|done| N10
+  N9 --x|load| N6
+  N11 <--> N5
+  N6 ==>|load| N8
+  N16 <--> N15
+  N5 <--> N4
+  N1 --x N14

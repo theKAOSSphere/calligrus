@@ -1,0 +1,4 @@
+# Not valid TOML at all: the whole file is ignored (all defaults), start-up continues.
+zoom = 1.5
+body_size = = 20
+[fonts

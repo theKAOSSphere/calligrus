@@ -1,0 +1,11 @@
+# Fixed configuration for the visual regression suite (spec 20).
+theme = "calligrus-light"
+zoom = 1.0
+body_size = 16
+show_outline = false
+vim_keys = true
+remember_window = false
+editor_marker = true
+
+[code]
+line_numbers = true

@@ -1,0 +1,14 @@
+size 436 504
+node bottom_disk 196 408 64 64 hidden=false lines=["Disk"] label=36.43323x24
+node bottom_gateway 340 408 64 64 hidden=false lines=["Gateway"] label=63.758156x24
+node junctionCenter 219 255 18 18 hidden=false lines=[""] label=0x24
+node junctionRight 363 255 18 18 hidden=false lines=[""] label=0x24
+node left_disk 52 232 64 64 hidden=false lines=["Disk"] label=36.43323x24
+node top_disk 196 56 64 64 hidden=false lines=["Disk"] label=36.43323x24
+node top_gateway 340 56 64 64 hidden=false lines=["Gateway"] label=63.758156x24
+edge left_disk->junctionCenter (116,264) (219,264) anchor=None
+edge top_disk->junctionCenter (228,120) (228,255) anchor=None
+edge bottom_disk->junctionCenter (228,408) (228,273) anchor=None
+edge junctionCenter->junctionRight (237,264) (363,264) anchor=None
+edge top_gateway->junctionRight (372,120) (372,255) anchor=None
+edge bottom_gateway->junctionRight (372,408) (372,273) anchor=None

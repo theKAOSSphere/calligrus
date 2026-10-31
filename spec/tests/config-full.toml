@@ -1,0 +1,21 @@
+# Every key set to a valid, non-default value.
+theme = "nord"
+dark_theme = "dracula"
+light_theme = "solarized-light"
+zoom = 1.5
+body_size = 20
+show_outline = false
+vim_keys = false
+system_fallback = false
+remember_window = false
+editor_marker = false
+
+[fonts]
+prose = 'C:\Share\me\Fonts\Literata-Regular.ttf'
+prose_bold = "C:\\Share\\me\\Fonts\\Literata-Bold.ttf"
+prose_italic = "~/fonts/Literata Italic.ttf"
+prose_bold_italic = "%USERPROFILE%\\fonts\\Literata-BoldItalic.otf"
+mono = "D:/fonts/Iosevka \"Term\".ttf"
+
+[code]
+line_numbers = true

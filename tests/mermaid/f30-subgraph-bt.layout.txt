@@ -1,0 +1,7 @@
+size 147.142 299.48416
+node A 35.084 191.98416 68.974 51 hidden=false lines=["A"] label=8.974x21
+node B 35 111 69.142 51 hidden=false lines=["B"] label=9.142x21
+node C 35.224 8 68.694 51 hidden=false lines=["C"] label=8.694x21
+edge A->B (69.571,191.98416) (69.571,162) anchor=None
+edge B->C (69.571,111) (69.571,59) anchor=None
+sub "Group" 8 75 123.142 208.48416

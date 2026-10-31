@@ -1,0 +1,5 @@
+theme = "auto"                  # comment column 33
+dark_theme = "calligrus-dark"   # comment column 33
+light_theme = "calligrus-light"	# tab before the comment: kept as-is
+show_outline = true
+zoom=1.0 # no spaces around '='

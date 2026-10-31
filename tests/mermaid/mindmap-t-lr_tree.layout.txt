@@ -1,0 +1,24 @@
+size 783.66437 268.11798
+node Axum 9.852997 44.279488 80.836 33.853 hidden=false lines=["Axum"] label=41.424004x24
+node Backend 241.4342 113.13249 103.17015 33.853 hidden=false lines=["Backend"] label=63.758156x24
+node Docker 609.0665 147.55899 94.061844 33.853 hidden=false lines=["Docker"] label=54.64985x24
+node Frontend 503.8045 44.279495 112.27846 33.853 hidden=false lines=["Frontend"] label=72.86646x24
+node Kubernetes 609.0665 216.41199 130.49507 33.853 hidden=false lines=["Kubernetes"] label=91.08308x24
+node Ops 503.8045 181.98549 67.812 33.853 hidden=false lines=["Ops"] label=28.400002x24
+node Postgres 91.70578 181.98547 112.27846 33.853 hidden=false lines=["Postgres"] label=72.86646x24
+node React 653.53296 9.852997 84.95354 33.853 hidden=false lines=["React"] label=45.54154x24
+node Rust 128.139 78.705986 75.84523 33.853 hidden=false lines=["Rust"] label=36.43323x24
+node SQLx 14.524994 113.132484 76.164 33.853 hidden=false lines=["SQLx"] label=36.752003x24
+node Tailwind 653.53296 78.70599 112.27846 33.853 hidden=false lines=["Tailwind"] label=72.86646x24
+node root 382.05435 87.90891 84.300156 84.300156 hidden=false lines=["Project"] label=63.758156x24
+edge root->Frontend (424.20444,130.05899) (559.9437,61.205994) anchor=None
+edge Frontend->React (559.9437,61.205994) (696.00977,26.779495) anchor=None
+edge Frontend->Tailwind (559.9437,61.205994) (709.67224,95.63249) anchor=None
+edge root->Backend (424.20444,130.05899) (293.0193,130.05899) anchor=None
+edge Backend->Rust (293.0193,130.05899) (166.06161,95.632484) anchor=None
+edge Rust->Axum (166.06161,95.632484) (50.270996,61.205986) anchor=None
+edge Rust->SQLx (166.06161,95.632484) (52.606995,130.05899) anchor=None
+edge Backend->Postgres (293.0193,130.05899) (147.845,198.91199) anchor=None
+edge root->Ops (424.20444,130.05899) (537.7105,198.91199) anchor=None
+edge Ops->Docker (537.7105,198.91199) (656.0974,164.48549) anchor=None
+edge Ops->Kubernetes (537.7105,198.91199) (674.314,233.33849) anchor=None

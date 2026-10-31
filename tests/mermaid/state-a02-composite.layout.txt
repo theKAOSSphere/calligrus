@@ -1,0 +1,14 @@
+size 136.32048 330.02
+node First 63.16024 127.43 2 2 hidden=true lines=["First"] label=39.848846x21
+node Third 28.383804 235.56 71.55373 41.159996 hidden=false lines=["Third"] label=39.848846x21
+node __end_First__ 24 182.26 13.3 13.3 hidden=false lines=[""] label=0x21
+node __end_root__ 57.510914 300.72 13.3 13.3 hidden=false lines=[""] label=0x21
+node __start_First__ 24 79.8 13.3 13.3 hidden=false lines=[""] label=0x21
+node __start_root__ 57.509743 8 13.3 13.3 hidden=false lines=[""] label=0x21
+node second 24 117.100006 80.32048 41.159996 hidden=false lines=["second"] label=47.81862x21
+edge __start_root__->First (64.159744,21.3) (64.159744,45.300003) anchor=None
+edge __start_First__->second (31.975,92.96667) (31.975,98.96667) (64.16024,111.100006) (64.16024,117.100006) anchor=None
+edge second->__end_First__ (64.16024,158.26001) (64.16024,164.26001) (31.975,176.39333) (31.975,182.39333) anchor=None
+edge First->Third (64.16067,211.56) (64.16067,235.56) anchor=None
+edge Third->__end_root__ (64.16067,276.72) (64.16089,300.72) anchor=None
+sub "First" 8 45.300003 112.32048 166.26

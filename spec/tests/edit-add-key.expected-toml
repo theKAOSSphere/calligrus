@@ -1,0 +1,9 @@
+theme = "nord"
+vim_keys = false
+
+[fonts]
+mono = "C:/fonts/Hack.ttf"
+prose = "C:/fonts/Literata.ttf"
+
+[code]
+line_numbers = true

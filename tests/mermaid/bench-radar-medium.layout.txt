@@ -1,0 +1,3 @@
+size 706.83307 688
+node radar_0 593.75 86.25 105.08308 96 hidden=false lines=["Alpha", "Speed: 3", "Quality: 4", "Cost: 2"] label=91.08308x96
+node radar_1 593.75 106.25 105.08308 96 hidden=false lines=["Beta", "Speed: 2", "Quality: 3", "Cost: 5"] label=91.08308x96

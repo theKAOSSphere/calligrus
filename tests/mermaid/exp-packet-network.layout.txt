@@ -1,0 +1,16 @@
+size 1403.9142 96
+node packet_0 8 8 115.78839 72 hidden=false lines=["0-3", "Version"] label=55.788387x42
+node packet_1 173.78839 8 83.90931 72 hidden=false lines=["4-7", "IHL"] label=23.90931x42
+node packet_2 307.6977 8 155.63724 72 hidden=false lines=["8-15", "Total Length"] label=95.63724x42
+node packet_3 513.33496 8 171.57678 72 hidden=false lines=["16-31", "Identification"] label=111.576775x42
+node packet_4 734.91174 8 99.84885 72 hidden=false lines=["32-39", "Flags"] label=39.848846x42
+node packet_5 884.7606 8 99.84885 72 hidden=false lines=["40-47", "TTL"] label=39.848846x42
+node packet_6 1034.6095 8 123.758156 72 hidden=false lines=["48-55", "Protocol"] label=63.758156x42
+node packet_7 1208.3677 8 179.54654 72 hidden=false lines=["56-63", "Header Checksum"] label=119.54654x42
+edge packet_0->packet_1 (123.78839,44) (141.28839,44) (156.28839,44) (173.78839,44) anchor=None
+edge packet_1->packet_2 (257.6977,44) (275.1977,44) (290.1977,44) (307.6977,44) anchor=None
+edge packet_2->packet_3 (463.33493,44) (480.83493,44) (495.83493,44) (513.33496,44) anchor=None
+edge packet_3->packet_4 (684.91174,44) (702.41174,44) (717.41174,44) (734.91174,44) anchor=None
+edge packet_4->packet_5 (834.7606,44) (852.2606,44) (867.2606,44) (884.7606,44) anchor=None
+edge packet_5->packet_6 (984.6095,44) (1002.1095,44) (1017.1095,44) (1034.6095,44) anchor=None
+edge packet_6->packet_7 (1158.3677,44) (1175.8677,44) (1190.8677,44) (1208.3677,44) anchor=None

@@ -1,0 +1,12 @@
+# Complex scripts in prose (spec 32): Devanagari conjuncts and vowel signs next to English,
+# and find / selection geometry on clusters.
+# config: config-indic.toml
+# Spec 33: exported as a PDF, its text copies as the real words (ToUnicode maps conjunct glyphs to their characters).
+# expect-pdf-text: indic.pdf क्षत्रिय|हिन्दी|प्रेम|श्री|ज्ञान और विज्ञान
+size 900 600
+open indic.md
+shot doc.png
+keys ctrl+f
+type हिन्दी
+shot find.png
+export-pages indic.pdf

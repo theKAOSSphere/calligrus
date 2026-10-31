@@ -1,0 +1,8 @@
+size 229.24423 621
+node a 19.954216 8 181.33493 156 hidden=false lines=["<<Requirement>>", "a", "ID: 1", "Text: styled", "Risk: High", "Verification: Analysis"] label=175.33493x126
+node b 23.939331 218 173.36516 114 hidden=false lines=["<<Design Constraint>>", "b", "ID: 2", "Text: constraint"] label=167.36516x84
+node c 8 386 205.24423 93 hidden=false lines=["<<Interface Requirement>>", "c", "ID: 3"] label=199.24423x63
+node d 11.984993 533 197.27448 72 hidden=false lines=["<<Physical Requirement>>", "d"] label=191.27448x42
+edge a->b (110.62168,164) (110.62191,218) anchor=Some((110.621796, 191.0))
+edge b->c (110.62191,332) (110.622116,386) anchor=Some((110.62202, 359.0))
+edge c->d (110.622116,479) (110.62223,533) anchor=Some((110.62217, 506.0))

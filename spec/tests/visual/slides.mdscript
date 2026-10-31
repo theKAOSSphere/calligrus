@@ -1,0 +1,12 @@
+size 900 700
+open slides.md
+keys f5
+shot first.png
+keys right
+shot second.png
+keys end
+shot last.png
+keys left
+shot third.png
+keys esc
+shot normal.png

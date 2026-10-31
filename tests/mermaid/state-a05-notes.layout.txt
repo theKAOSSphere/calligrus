@@ -1,0 +1,4 @@
+size 746.4602 210.41599
+node State1 231.75815 8 228.28607 95.256 hidden=false lines=["State1", "---", "The state with a note"] label=167.36516x63
+node State2 305.74094 153.256 80.32048 41.159996 hidden=false lines=["State2"] label=47.81862x21
+edge State1->State2 (345.90118,103.256) (345.90118,153.256) anchor=None

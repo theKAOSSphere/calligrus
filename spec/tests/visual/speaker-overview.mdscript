@@ -1,0 +1,14 @@
+# The overview with the presenter window open (spec 26): it is shown there, the audience keeps the slide.
+# (Scripts have no second window: the presenter view, here the grid, takes the main window's place.)
+size 1000 640
+open speaker.md
+keys f5
+keys s
+keys o
+shot grid.png
+keys right
+keys enter
+shot picked.png
+keys s
+keys o
+shot main-grid.png

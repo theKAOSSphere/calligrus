@@ -1,0 +1,10 @@
+size 1184 417
+node a 96 126 200 99 hidden=false lines=["A"] label=10.2560005x17
+node b 360 126 200 99 hidden=false lines=["B"] label=10.448001x17
+node c 624 126 200 99 hidden=false lines=["C"] label=9.936001x17
+node d 888 126 200 56 hidden=false lines=["D"] label=10.736x17
+node e 96 289 200 56 hidden=false lines=["E"] label=9.328x17
+node f 360 289 200 56 hidden=false lines=["F"] label=8.944x17
+edge a->f (290.33508,225) (419.54184,289) anchor=None
+edge a->b (296,189.0989) (360,205.68292) anchor=None
+edge a->c (296,183.38217) (296,110) (624,110) (624,187.06541) anchor=None

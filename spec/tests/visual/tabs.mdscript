@@ -1,0 +1,24 @@
+# Spec 34: tabs. Ctrl+click (or middle-click) on a link to a file opens it in a new tab; the bar
+# appears with the second tab. Ctrl+1 / Ctrl+Tab / Ctrl+W switch and close.
+size 900 400
+open tabs.md
+expect-tabs 1 1
+shot one.png
+click 100 172 ctrl
+expect-tabs 2 2
+shot two.png
+keys ctrl+1
+expect-tabs 2 1
+shot first.png
+click 100 232 middle
+expect-tabs 3 3
+shot three.png
+keys ctrl+tab
+expect-tabs 3 1
+shot wrapped.png
+keys ctrl+w
+expect-tabs 2 1
+shot closed.png
+keys ctrl+w
+expect-tabs 1 1
+shot last.png

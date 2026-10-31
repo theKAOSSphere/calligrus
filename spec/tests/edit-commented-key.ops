@@ -1,0 +1,3 @@
+set zoom 1.5
+set vim_keys false
+set fonts.mono "C:/fonts/Hack.ttf"

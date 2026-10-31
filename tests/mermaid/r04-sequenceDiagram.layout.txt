@@ -1,0 +1,7 @@
+size 350 336
+node U 0 0 150 65 hidden=false lines=["You"] label=27.536003x24
+node V 200 0 150 65 hidden=false lines=["calligrus"] label=81.97477x24
+edge U->V (75,111) (275,111) anchor=Some((175.0, 94.2))
+edge V->U (275,157) (75,157) anchor=Some((175.0, 140.2))
+edge U->V (75,203) (275,203) anchor=Some((175.0, 186.2))
+edge V->U (275,249) (75,249) anchor=Some((175.0, 232.2))

@@ -1,0 +1,10 @@
+# only top-level keys so far
+theme = "dracula"
+zoom = 1.2
+
+[code]
+line_numbers = true
+
+[fonts]
+mono = "C:/fonts/Hack.ttf"
+prose = "C:/fonts/Literata.ttf"

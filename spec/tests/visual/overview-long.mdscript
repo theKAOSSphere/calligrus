@@ -1,0 +1,13 @@
+# The overview of a long deck (spec 26): cells stay at least 160 px wide and the grid scrolls; a
+# moved pick is scrolled into view, the wheel scrolls it.
+size 900 700
+open overview-long.md
+keys f5
+keys o
+shot top.png
+keys end
+shot end.png
+wheel -3 450 350
+shot wheel.png
+keys enter
+shot picked.png

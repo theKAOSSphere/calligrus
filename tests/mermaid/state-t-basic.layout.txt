@@ -1,0 +1,8 @@
+size 183.86499 211.18
+node Active 8 154.01999 80.32048 41.159996 hidden=false lines=["Active"] label=47.81862x21
+node Idle 16.762753 73.159996 62.786987 41.159996 hidden=false lines=["Idle"] label=31.879078x21
+node Wait 78.77777 8 89.08723 41.159996 hidden=false lines=["Waiting"] label=55.788387x21
+node __start_root__ 41.477768 8 13.3 13.3 hidden=false lines=[""] label=0x21
+edge __start_root__->Idle (48.14282,21.3) (48.14282,73.159996) anchor=None
+edge Idle->Active (48.15824,114.31999) (48.15824,154.01999) anchor=Some((48.15824, 134.16998))
+edge Wait->Active (123.32138,49.159996) (123.32138,57.559998) (64.16024,145.62) (64.16024,154.01999) anchor=None

@@ -1,0 +1,26 @@
+size 127.27596 927.64984
+node Idle 20.253395 47.852276 62.786987 41.159996 hidden=false lines=["Idle"] label=31.879078x21
+node State1 11.590111 130.11603 80.32048 41.159996 hidden=false lines=["State1"] label=47.81862x21
+node State10 8 870.48987 89.08723 41.159996 hidden=false lines=["State10"] label=55.788387x21
+node State2 11.700254 212.37976 80.32048 41.159996 hidden=false lines=["State2"] label=47.81862x21
+node State3 11.813124 294.64352 80.32048 41.159996 hidden=false lines=["State3"] label=47.81862x21
+node State4 11.924778 376.90726 80.32048 41.159996 hidden=false lines=["State4"] label=47.81862x21
+node State5 12.031445 459.171 80.32048 41.159996 hidden=false lines=["State5"] label=47.81862x21
+node State6 12.12965 541.4347 80.32048 41.159996 hidden=false lines=["State6"] label=47.81862x21
+node State7 12.216312 623.6985 80.32048 41.159996 hidden=false lines=["State7"] label=47.81862x21
+node State8 12.288809 705.9623 80.32048 41.159996 hidden=false lines=["State8"] label=47.81862x21
+node State9 12.345024 788.2261 80.32048 41.159996 hidden=false lines=["State9"] label=47.81862x21
+node __end_root__ 97.97596 792.6873 13.3 13.3 hidden=false lines=[""] label=0x21
+node __start_root__ 44.903908 8 13.3 13.3 hidden=false lines=[""] label=0x21
+edge __start_root__->Idle (51.605057,21.299994) (51.605057,47.852276) anchor=None
+edge State1->State2 (51.805424,171.27602) (51.805424,212.37976) anchor=Some((51.805424, 191.82788))
+edge State2->State3 (51.91693,253.53976) (51.91693,294.64352) anchor=Some((51.91693, 274.09164))
+edge State3->State4 (52.02919,335.80353) (52.02919,376.90726) anchor=Some((52.02919, 356.3554))
+edge State4->State5 (52.13835,418.06726) (52.13835,459.171) anchor=Some((52.13835, 438.61914))
+edge State5->State6 (52.240788,500.331) (52.240788,541.4347) anchor=Some((52.240788, 520.8828))
+edge State6->State7 (52.33322,582.59467) (52.33322,623.6985) anchor=Some((52.33322, 603.1466))
+edge State7->State8 (52.4128,664.85846) (52.4128,705.9623) anchor=Some((52.4128, 685.4104))
+edge State8->State9 (52.477158,747.12225) (52.477158,788.2261) anchor=Some((52.477158, 767.6742))
+edge State9->State10 (52.524437,829.38605) (52.524437,870.48987) anchor=Some((52.524437, 849.938))
+edge Idle->State1 (51.69862,89.01227) (51.69862,130.11603) anchor=Some((51.69862, 109.56415))
+edge State10->__end_root__ (68.54361,870.48987) (68.54361,868.6794) (103.300964,868.6794) (103.300964,805.854) anchor=None

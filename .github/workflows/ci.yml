@@ -1,0 +1,141 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# The vcpkg binary cache is a plain folder that actions/cache saves and restores.
+env:
+  VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-cache
+  VCPKG_DISABLE_METRICS: "1"
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache vcpkg binary packages
+        uses: actions/cache@v4
+        with:
+          path: .vcpkg-cache
+          key: vcpkg-windows-${{ hashFiles('vcpkg.json') }}
+          restore-keys: vcpkg-windows-
+
+      - name: Get vcpkg at the manifest baseline
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force .vcpkg-cache | Out-Null
+          $baseline = (Get-Content vcpkg.json -Raw | ConvertFrom-Json).'builtin-baseline'
+          $root = Join-Path $env:RUNNER_TEMP 'vcpkg'
+          git init $root
+          git -C $root remote add origin https://github.com/microsoft/vcpkg
+          git -C $root fetch --depth 1 origin $baseline
+          git -C $root checkout FETCH_HEAD
+          & "$root\bootstrap-vcpkg.bat" -disableMetrics
+          "VCPKG_ROOT=$root" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+
+      - name: Build (Release, MSVC, x64-windows-static)
+        shell: pwsh
+        run: .\build.ps1
+
+      - name: Run the console tests
+        shell: pwsh
+        run: |
+          $failed = @()
+          foreach ($t in Get-ChildItem build\Release\calligrus-*-test.exe) {
+            Write-Host "== $($t.Name)"
+            & $t.FullName
+            if ($LASTEXITCODE -ne 0) { $failed += $t.Name }
+          }
+          if ($failed) { throw "failed: $($failed -join ', ')" }
+
+      # The app needs OpenGL 3.3; the hosted Windows runners only have the GDI 1.1 driver, so
+      # install Mesa's software renderer.
+      - name: Software OpenGL (Mesa llvmpipe)
+        if: hashFiles('spec/tests/visual/refs/windows/**') != ''
+        uses: ssciwr/setup-mesa-dist-win@v2
+
+      - name: Visual suite
+        if: hashFiles('spec/tests/visual/refs/windows/**') != ''
+        shell: pwsh
+        run: |
+          python -m pip install pillow pymupdf
+          Set-Location spec\tests\visual
+          python run.py
+
+      - name: Visual suite skipped
+        if: hashFiles('spec/tests/visual/refs/windows/**') == ''
+        run: echo "No spec/tests/visual/refs/windows folder; the visual suite is skipped."
+
+      - name: Upload the visual report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-report-windows
+          path: |
+            spec/tests/visual/report
+            spec/tests/visual/out
+          if-no-files-found: ignore
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache vcpkg binary packages
+        uses: actions/cache@v4
+        with:
+          path: .vcpkg-cache
+          key: vcpkg-linux-${{ hashFiles('vcpkg.json') }}
+          restore-keys: vcpkg-linux-
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build git curl zip unzip tar pkg-config \
+            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl-dev \
+            libxkbcommon-dev libwayland-dev libxext-dev \
+            xvfb libgl1-mesa-dri python3-pip
+
+      - name: Get vcpkg at the manifest baseline
+        run: |
+          mkdir -p .vcpkg-cache
+          baseline=$(python3 -c "import json; print(json.load(open('vcpkg.json'))['builtin-baseline'])")
+          git init "$HOME/vcpkg"
+          git -C "$HOME/vcpkg" remote add origin https://github.com/microsoft/vcpkg
+          git -C "$HOME/vcpkg" fetch --depth 1 origin "$baseline"
+          git -C "$HOME/vcpkg" checkout FETCH_HEAD
+          echo "VCPKG_ROOT=$HOME/vcpkg" >> "$GITHUB_ENV"
+
+      - name: Build (Release)
+        run: bash build.sh
+
+      - name: Run the console tests
+        run: |
+          fail=0
+          for t in build/calligrus-*-test; do
+            echo "== $t"
+            "$t" || fail=1
+          done
+          exit $fail
+
+      - name: Visual suite
+        run: |
+          if [ -d spec/tests/visual/refs/linux ]; then
+            python3 -m pip install pillow pymupdf
+            cd spec/tests/visual
+            python3 run.py --exe ../../../build/calligrus
+          else
+            echo "No spec/tests/visual/refs/linux folder; the visual suite is skipped."
+          fi
+
+      - name: Upload the visual report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-report-linux
+          path: |
+            spec/tests/visual/report
+            spec/tests/visual/out
+          if-no-files-found: ignore

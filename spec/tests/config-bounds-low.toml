@@ -1,0 +1,5 @@
+zoom = 0.5                   # lower bound, valid
+body_size = 12               # lower bound, valid
+max_width = 400              # lower bound, valid
+dark_theme = "no-such-theme" # any non-empty string is accepted here; unknown theme
+                             # names are resolved (and fall back) by the theme code, not the parser

@@ -1,0 +1,6 @@
+# The README's hero screenshot (see README.md in this folder for how to run it).
+size 1200 760
+scale 2
+open showcase.md
+settle
+shot hero.png

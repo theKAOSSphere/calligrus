@@ -1,0 +1,18 @@
+size 159.97523 824.3202
+node done 33.871124 724.0862 84.234 84.234 hidden=false lines=["End"] label=24.234001x21
+node p 41.92738 116.030136 68.12 51 hidden=false lines=["p"] label=8.12x21
+node q 41.92738 191.03014 68.12 51 hidden=false lines=["q"] label=8.12x21
+node r 41.92738 266.03015 67.96977 51 hidden=false lines=["r"] label=7.9697695x21
+node s 42.002968 498.02594 67.96977 51 hidden=false lines=["s"] label=7.9697695x21
+node sg1 74.98738 213.28014 2 2 hidden=true lines=["sg1"] label=23.90931x21
+node sg2 74.987854 574.041 2 2 hidden=true lines=["sg2"] label=23.90931x21
+node start 43.162415 8 65.64885 36 hidden=false lines=["Start"] label=39.848846x21
+node t 42.002968 605.5561 67.96977 51 hidden=false lines=["t"] label=7.9697695x21
+edge start->sg1 (75.98684,44) (75.98684,50) (75.98684,69.530136) (75.98684,75.530136) anchor=None
+edge p->q (75.98738,167.03014) (75.98738,191.03014) anchor=None
+edge q->r (75.94983,242.03014) (75.94983,266.03015) anchor=None
+edge sg1->sg2 (76.987854,352.03015) (82.987854,352.03015) (120.82378,352.03015) (120.82378,458.52594) (82.98738,458.52594) (76.98738,458.52594) anchor=Some((85.54335, 368.23016))
+edge s->t (75.987854,549.02594) (75.987854,605.5561) anchor=None
+edge sg2->done (75.98813,692.5561) (75.98813,698.5561) (75.98813,718.0862) (75.98813,724.0862) anchor=None
+sub "Group One" 8 75.530136 135.97476 277.5
+sub "Group Two" 8.000473 457.52594 135.97476 235.03015

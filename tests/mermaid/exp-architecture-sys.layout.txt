@@ -1,0 +1,12 @@
+size 608 396
+node api 340 56 64 64 hidden=false lines=["API"] label=27.324924x24
+node auth 340 232 64 64 hidden=false lines=["Auth"] label=36.43323x24
+node cdn 52 56 64 64 hidden=false lines=["CDN"] label=31.984001x24
+node db 484 56 64 64 hidden=false lines=["DB"] label=21.184002x24
+node web 196 56 64 64 hidden=false lines=["Web"] label=32.32x24
+edge web->api (260,88) (340,88) anchor=None
+edge api->auth (404,88) (372,88) (372,264) (340,264) anchor=None
+edge api->db (404,88) (484,88) anchor=None
+edge cdn->web (116,88) (196,88) anchor=None
+sub "Core" 312 24 264 340
+sub "Edge" 24 24 264 164

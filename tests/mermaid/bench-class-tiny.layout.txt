@@ -1,0 +1,2 @@
+size 130.78839 115
+node Foo 8 8 106.78839 91 hidden=false lines=["Foo", "---", "+id int"] label=55.788387x53.550003

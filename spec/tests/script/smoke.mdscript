@@ -1,0 +1,18 @@
+# Shared smoke test for headless script mode (spec §14).
+# Run:  calligrus.exe --script smoke.mdscript   /   the Rust port.exe --script smoke.mdscript
+size 1000 800
+open smoke.md
+settle
+shot out/01-top.png
+keys G
+shot out/02-bottom.png
+keys g g
+keys ctrl+f
+type findme
+shot out/03-find.png
+keys esc
+keys ctrl+plus ctrl+plus
+shot out/04-zoom.png
+keys ctrl+0
+wheel 3
+shot out/05-wheel.png

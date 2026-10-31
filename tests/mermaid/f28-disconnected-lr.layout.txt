@@ -1,0 +1,9 @@
+size 636.2072 75.00375
+node A 8 8.000473 85.55 51 hidden=false lines=["One"] label=25.550001x21
+node B 143.38669 8 86.600006 51 hidden=false lines=["Two"] label=26.600002x21
+node C 265.52454 8.003754 99.84885 51 hidden=false lines=["Three"] label=39.848846x21
+node D 400.91122 8.003281 91.879074 51 hidden=false lines=["Four"] label=31.879078x21
+node E 528.3281 8 91.879074 51 hidden=false lines=["Five"] label=31.879078x21
+edge A->B (93.55,33.500473) (143.38669,33.5) anchor=None
+edge C->D (365.37338,33.503754) (400.91122,33.50328) anchor=None
+edge D->E (492.79028,33.50164) (528.3281,33.50164) anchor=None

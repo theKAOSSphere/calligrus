@@ -1,0 +1,13 @@
+size 900 700
+open find.md
+keys ctrl+f
+type fox
+shot smartcase-lower.png
+keys enter enter
+shot next-match.png
+type X
+shot no-match.png
+keys esc
+keys ctrl+f
+type Fox
+shot smartcase-upper.png

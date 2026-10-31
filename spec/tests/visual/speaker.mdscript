@@ -1,0 +1,15 @@
+# The presenter view (spec 26, `s`): the slide as the audience sees it, what comes next, the notes.
+# (Scripts have no second window: the view takes the main window's place; the clock stays at 0:00.)
+size 1000 640
+open speaker.md
+keys f5
+keys s
+shot first.png
+keys right
+shot second-step.png
+keys right
+shot middle.png
+keys end
+shot last.png
+keys s
+shot back.png

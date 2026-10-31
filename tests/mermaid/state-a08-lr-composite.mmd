@@ -1,0 +1,13 @@
+stateDiagram-v2
+    direction LR
+    [*] --> Idle
+    Idle --> Working : start
+    state Working {
+        direction LR
+        [*] --> Reading
+        Reading --> Writing
+        Writing --> [*]
+    }
+    Working --> Idle : done
+    Working --> Error
+    Error --> [*]

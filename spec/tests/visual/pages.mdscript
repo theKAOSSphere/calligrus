@@ -1,0 +1,25 @@
+# Spec 29: the document as a PDF of real pages. `export-pages FILE` is the toolbar's "PDF" menu,
+# "Pages...", without its dialog; a toast says how it went. (The script runner also checks the
+# number of pages of the PDF: the next lines, see run.py's check_pdf_pages.)
+# The pages' text size is what the user sees (body size x zoom): after Ctrl+plus three times the second
+# export has bigger text, so more pages. (The size in the PDF is body size x zoom x 0.75 pt: 16 px = 12 pt.)
+# expect-pdf-pages: pages.pdf 3
+# expect-pdf-pages: pages-zoomed.pdf 4
+# Spec 33: the pages have real text (selectable) over a picture without text: the text has the headings,
+# the file is small, and page 1 looks like the --raster export's.
+# expect-pdf-text: pages.pdf Pages sample|First part|A long listing|Last part
+# expect-pdf-max-kb: pages.pdf 150
+# expect-pdf-raster-diff: pages.pdf pages.md 6
+# A page break must not leave a cut-off line from the other page at an edge (nor repeat it).
+# expect-pdf-no-repeat: pages.pdf
+# expect-pdf-no-repeat: pages-zoomed.pdf
+size 900 600
+open pages.md
+export-pages pages.pdf
+shot toast.png
+keys ctrl+plus
+keys ctrl+plus
+keys ctrl+plus
+settle
+export-pages pages-zoomed.pdf
+shot toast-zoomed.png

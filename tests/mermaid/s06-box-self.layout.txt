@@ -1,0 +1,10 @@
+size 750 390.4
+node A 0 0 150 65 hidden=false lines=["A"] label=10.2560005x24
+node B 200 0 150 65 hidden=false lines=["B"] label=10.448001x24
+node Cache 600 0 150 65 hidden=false lines=["Cache"] label=45.54154x24
+node D 400 0 150 65 hidden=false lines=["Database"] label=72.86646x24
+edge A->A (75,111) (110,111) (110,146) (75,146) anchor=Some((141.5, 128.5))
+edge A->B (75,157) (275,157) anchor=Some((175.0, 173.8))
+edge B->D (275,203) (475,203) anchor=Some((375.0, 186.2))
+edge D->B (475,249) (275,249) anchor=Some((375.0, 232.2))
+edge B->Cache (275,295) (675,295) anchor=Some((439.8927, 278.2))

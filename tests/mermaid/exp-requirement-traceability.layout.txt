@@ -1,0 +1,10 @@
+size 500.22925 474
+node db 306.95752 193 133 93 hidden=false lines=["<<Element>>", "db", "Type: database"] label=111.576775x63
+node req1 15.770966 8 197.27448 135 hidden=false lines=["<<Requirement>>", "req1", "ID: 1", "Text: Users can register", "Risk: Medium"] label=191.27448x105
+node req2 8 197 213.214 114 hidden=false lines=["<<Functional Requirement>>", "req2", "ID: 2", "Text: Email verification"] label=207.214x84
+node req3 263.04547 8 221.18378 114 hidden=false lines=["<<Performance Requirement>>", "req3", "ID: 3", "Text: 95% under 300ms"] label=215.18378x84
+node web 48.126923 365 133 93 hidden=false lines=["<<Element>>", "web", "Type: system"] label=95.63724x63
+edge req1->req2 (114.4082,143) (24.507599,143) (24.507599,197) (114.5076,170) (114.607,197) anchor=Some((62.204002, 185.53117))
+edge req2->web (114.607,311) (54.61696,311) (54.61696,365) (114.61696,338) (114.62692,365) anchor=Some((54.61696, 354.40256))
+edge req3->web (325.63733,122) (266.13214,122) (236.13214,243.5) (266.13214,365) (146.62692,365) anchor=Some((243.32358, 272.6253))
+edge req3->db (389.63733,122) (441.54742,122) (441.54742,193) (381.54742,157.5) (373.45752,193) anchor=Some((441.54742, 184.60777))

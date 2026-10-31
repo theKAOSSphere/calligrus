@@ -1,0 +1,10 @@
+size 464 396
+node a 52 56 64 64 hidden=false lines=["A"] label=10.2560005x24
+node b 196 56 64 64 hidden=false lines=["B"] label=10.448001x24
+node c 340 56 64 64 hidden=false lines=["C"] label=9.936001x24
+node d 340 232 64 64 hidden=false lines=["D"] label=10.736x24
+edge a->b (116,88) (196,88) anchor=None
+edge c->d (372,120) (372,232) anchor=None
+edge b->c (260,88) (340,88) anchor=None
+sub "Left Group" 24 24 264 164
+sub "Right Group" 312 24 120 340

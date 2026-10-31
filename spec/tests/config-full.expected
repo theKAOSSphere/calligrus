@@ -1,0 +1,17 @@
+body_size = 20
+code.line_numbers = true
+dark_theme = "dracula"
+editor_marker = false
+fonts.mono = "D:/fonts/Iosevka \"Term\".ttf"
+fonts.prose = "C:\\Share\\me\\Fonts\\Literata-Regular.ttf"
+fonts.prose_bold = "C:\\Share\\me\\Fonts\\Literata-Bold.ttf"
+fonts.prose_bold_italic = "%USERPROFILE%\\fonts\\Literata-BoldItalic.otf"
+fonts.prose_italic = "~/fonts/Literata Italic.ttf"
+light_theme = "solarized-light"
+max_width = 860
+remember_window = false
+show_outline = false
+system_fallback = false
+theme = "nord"
+vim_keys = false
+zoom = 1.5

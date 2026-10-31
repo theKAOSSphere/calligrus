@@ -1,0 +1,28 @@
+size 942.6232 405.82397
+node Engineering 440.16837 113.1325 139.60338 33.853 hidden=false lines=["Engineering"] label=100.19138x24
+node Finance 9.852997 216.412 103.17015 33.853 hidden=false lines=["Finance"] label=63.758156x24
+node Growth 440.16837 319.69147 94.061844 33.853 hidden=false lines=["Growth"] label=54.64985x24
+node Marketing 571.6802 285.26498 121.386765 33.853 hidden=false lines=["Marketing"] label=81.97477x24
+node Mobile 757.8419 216.41199 94.061844 33.853 hidden=false lines=["Mobile"] label=54.64985x24
+node Observability 766.9502 9.852997 157.82 33.853 hidden=false lines=["Observability"] label=118.408005x24
+node Operations 150.47314 181.9855 130.49507 33.853 hidden=false lines=["Operations"] label=91.08308x24
+node Platform 617.22174 44.279495 112.27846 33.853 hidden=false lines=["Platform"] label=72.86646x24
+node Product 617.22174 181.98549 103.17015 33.853 hidden=false lines=["Product"] label=63.758156x24
+node Sales 571.6802 354.11798 84.95354 33.853 hidden=false lines=["Sales"] label=45.54154x24
+node Support 9.852997 147.559 103.17015 33.853 hidden=false lines=["Support"] label=63.758156x24
+node Tooling 766.9502 78.70599 103.17015 33.853 hidden=false lines=["Tooling"] label=63.758156x24
+node Web 757.8419 147.55899 71.731995 33.853 hidden=false lines=["Web"] label=32.32x24
+node root 318.4182 156.76193 84.300156 84.300156 hidden=false lines=["Program"] label=63.758156x24
+edge root->Engineering (360.5683,198.912) (509.97006,130.05899) anchor=None
+edge Engineering->Platform (509.97006,130.05899) (673.36096,61.205994) anchor=None
+edge Platform->Observability (673.36096,61.205994) (845.86017,26.779495) anchor=None
+edge Platform->Tooling (673.36096,61.205994) (818.5353,95.63249) anchor=None
+edge Engineering->Product (509.97006,130.05899) (668.8068,198.91199) anchor=None
+edge Product->Web (668.8068,198.91199) (793.7079,164.48549) anchor=None
+edge Product->Mobile (668.8068,198.91199) (804.8728,233.33849) anchor=None
+edge root->Operations (360.5683,198.912) (215.72067,198.912) anchor=None
+edge Operations->Support (215.72067,198.912) (61.43808,164.4855) anchor=None
+edge Operations->Finance (215.72067,198.912) (61.43808,233.3385) anchor=None
+edge root->Growth (360.5683,198.912) (487.19928,336.61798) anchor=None
+edge Growth->Marketing (487.19928,336.61798) (632.3736,302.19147) anchor=None
+edge Growth->Sales (487.19928,336.61798) (614.157,371.0445) anchor=None

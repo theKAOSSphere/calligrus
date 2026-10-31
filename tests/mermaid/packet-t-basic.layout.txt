@@ -1,0 +1,4 @@
+size 248.72792 96
+node packet_0 8 8 91.879074 72 hidden=false lines=["0-7", "Type"] label=31.879078x42
+node packet_1 140.84885 8 91.879074 72 hidden=false lines=["8-15", "Len"] label=31.879078x42
+edge packet_0->packet_1 (99.879074,44) (114.21849,44) (126.50943,44) (140.84885,44) anchor=None

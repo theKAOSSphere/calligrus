@@ -1,0 +1,13 @@
+# The slide overview (spec 26): `o` shows every slide as a picture; arrows pick, Enter shows it.
+size 900 700
+open slides.md
+keys f5
+keys o
+shot grid.png
+keys right down
+shot moved.png
+keys enter
+shot picked.png
+keys o
+click 670 250
+shot clicked.png

@@ -1,0 +1,13 @@
+size 447.83365 302.5136
+node Course 228.04526 169.01361 71.81862 91 hidden=false lines=["Course"] label=47.81862x17.850002
+node Customer 344.0755 8 87.758156 91 hidden=false lines=["Customer"] label=63.758156x17.850002
+node Galaxy 112.05539 8 71.81862 91 hidden=false lines=["Galaxy"] label=47.81862x17.850002
+node Item 12.04538 195.51361 55.879078 91 hidden=false lines=["Item"] label=31.879078x17.850002
+node Order 8 8 63.848846 91 hidden=false lines=["Order"] label=39.848846x17.850002
+node Star 120.04533 168.4136 55.879078 91 hidden=false lines=["Star"] label=31.879078x17.850002
+node Student 224.08055 8 79.78839 91 hidden=false lines=["Student"] label=55.788387x17.850002
+node Ticket 351.98474 169.01361 71.81862 91 hidden=false lines=["Ticket"] label=47.81862x17.850002
+edge Customer->Ticket (387.95456,99) (387.89838,164.01361) anchor=None
+edge Student->Course (263.97473,99) (263.956,164.01361) anchor=None
+edge Galaxy->Star (147.96469,99) (196.22263,99) (196.22263,168.4136) (152.98486,168.4136) anchor=Some((196.22263, 131.19672))
+edge Order->Item (39.924423,99) (64.078606,99) (64.078606,195.51361) (39.984924,195.51361) anchor=Some((64.078606, 147.22656))

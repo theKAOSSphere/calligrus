@@ -1,0 +1,2 @@
+size 688 688
+node radar_0 593.75 86.25 59.54154 96 hidden=false lines=["Alpha", "A: 1", "B: 2", "C: 3"] label=45.54154x96

@@ -1,0 +1,9 @@
+erDiagram
+    USER ||--o{ POST : writes
+    USER ||--o{ COMMENT : writes
+    POST ||--o{ COMMENT : has
+    POST }o--o{ TAG : tagged
+    USER }o--o{ GROUP : member
+    GROUP ||--o{ POST : owns
+    USER ||--|| PROFILE : has
+    PROFILE ||--o{ LINK : lists

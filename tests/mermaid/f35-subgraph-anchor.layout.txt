@@ -1,0 +1,10 @@
+size 147.142 421.76697
+node A 35.083958 8 68.974 51 hidden=false lines=["A"] label=8.974x21
+node B 35 130.25566 69.142 51 hidden=false lines=["B"] label=9.142x21
+node C 35 237.01132 68.694 51 hidden=false lines=["C"] label=8.694x21
+node D 34.87403 354.76697 69.394 51 hidden=false lines=["D"] label=9.394x21
+node grp 68.571 205.88348 2 2 hidden=true lines=["grp"] label=23.90931x21
+edge A->grp (69.57095,59) (69.57095,65) (69.57095,83.75566) (69.57095,89.75566) anchor=None
+edge B->C (69.459,181.25566) (69.459,237.01132) anchor=None
+edge grp->D (69.57103,324.01132) (69.57103,330.01132) (69.57103,348.76697) (69.57103,354.76697) anchor=None
+sub "Group" 8 89.75566 123.142 234.25566

@@ -1,0 +1,12 @@
+architecture-beta
+    service web(internet)[Web]
+    service gw(aws-api-gateway)[Gateway]
+    service fn(lambda)[Function]
+    service store(s3)[Bucket]
+    service cache(redis)[Cache]
+    junction j1
+    web:R --> L:gw
+    gw:R --> L:fn
+    fn:B -- T:store
+    fn:R -- L:j1
+    j1:R -- L:cache

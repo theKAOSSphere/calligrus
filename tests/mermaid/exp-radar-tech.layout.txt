@@ -1,0 +1,3 @@
+size 743.2663 688
+node radar_0 593.75 86.25 141.51631 120 hidden=false lines=["Platform", "Security: 4", "Reliability: 5", "Cost: 3", "Velocity: 4"] label=127.51631x120
+node radar_1 593.75 106.25 141.51631 120 hidden=false lines=["Legacy", "Security: 2", "Reliability: 3", "Cost: 4", "Velocity: 2"] label=127.51631x120

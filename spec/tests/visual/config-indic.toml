@@ -1,0 +1,18 @@
+# Configuration for the indic fixture (spec 32): like config.toml, but the prose font is a
+# test-only OFL font (spec/tests/fonts/), so the shots don't depend on installed fonts.
+# The path is relative to the folder the suite runs in (this one).
+theme = "calligrus-light"
+zoom = 1.0
+body_size = 16
+show_outline = false
+vim_keys = true
+remember_window = false
+editor_marker = true
+# Installed fonts differ per machine (spec 30).
+system_fallback = false
+
+[fonts]
+prose = "../fonts/NotoSansDevanagari-Regular.ttf"
+
+[code]
+line_numbers = false

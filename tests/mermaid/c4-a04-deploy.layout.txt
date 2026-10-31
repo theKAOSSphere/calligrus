@@ -1,0 +1,8 @@
+size 944 1040
+node api 192 709 200 125 hidden=false lines=["API Application"] label=111.552x17
+node db 552 709 200 163 hidden=false lines=["Database"] label=67.84x17
+node mobile 128 180 200 136 hidden=false lines=["Mobile App"] label=80.96001x17
+node spa 456 234 200 153 hidden=false lines=["Single Page", "Application"] label=83.216x34
+edge mobile->api (246.85376,316) (296.8807,709) anchor=None
+edge spa->api (532.6586,387) (349.08908,709) anchor=None
+edge db->api (552,814.53845) (392,789.2174) anchor=None

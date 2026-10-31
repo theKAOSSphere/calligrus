@@ -1,0 +1,5 @@
+size 350 244
+node Alice 0 0 150 65 hidden=false lines=["Alice"] label=45.54154x24
+node Bob 200 0 150 65 hidden=false lines=["Bob"] label=28.688002x24
+edge Alice->Bob (75,111) (275,111) anchor=Some((175.0, 94.2))
+edge Bob->Alice (275,157) (75,157) anchor=Some((175.0, 140.2))

@@ -1,0 +1,6 @@
+size 356.97476 546.4
+node Alice 0 0 150 65 hidden=false lines=["Alice"] label=45.54154x24
+node John 206.97476 0 150 65 hidden=false lines=["John"] label=36.43323x24
+edge Alice->John (75,202.5) (281.97476,202.5) anchor=Some((178.48738, 137.4))
+edge John->Alice (281.97476,268) (75,268) anchor=Some((178.48738, 236.8))
+edge John->Alice (281.97476,314) (75,314) anchor=Some((178.48738, 297.2))

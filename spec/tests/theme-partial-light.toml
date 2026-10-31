@@ -1,0 +1,8 @@
+# dark = false: missing keys come from calligrus-light.
+name = "my-partial-light"
+dark = false
+
+[doc]
+bg = "#FFFFFF"
+heading = "#003366"
+find_match = "#ffff0080"

@@ -1,0 +1,10 @@
+size 720 674
+node c1 360 126 200 153 hidden=false lines=["Single-Page", "Application"] label=85.824005x34
+node c2 392 429 200 141 hidden=false lines=["Sign In Controller"] label=125.663994x17
+node c3 128 429 200 125 hidden=false lines=["Security Component"] label=146.144x17
+node c4 96 126 200 130 hidden=false lines=["Database"] label=67.84x17
+edge c1->c2 (487.03613,279) (513.1656,429) anchor=None
+edge c2->c3 (392,537.60974) (328,510.86813) anchor=None
+edge c3->c4 (245.85715,429) (219.47469,256) anchor=None
+edge c1->c4 (360,242.13416) (296,212.01648) anchor=None
+edge c1->c4 (360,242.13416) (296,212.01648) anchor=None

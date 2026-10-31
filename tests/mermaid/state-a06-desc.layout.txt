@@ -1,0 +1,10 @@
+size 810.79645 151.008
+node __end_root__ 781.49646 64.85605 13.3 13.3 hidden=false lines=[""] label=0x21
+node __start_root__ 8 64.85053 13.3 13.3 hidden=false lines=[""] label=0x21
+node s1 66.16751 23.874302 293.51068 95.256 hidden=false lines=["s1", "---", "This is a state description"] label=215.18378x63
+node s2 405.65027 8 124.15421 127.007996 hidden=false lines=["s2", "---", "Another one", "extra line"] label=87.667465x84
+node s3 573.56744 50.92533 163.06148 41.159996 hidden=false lines=["Long name state"] label=119.54654x21
+edge __start_root__->s1 (21.3,71.50147) (66.16751,71.50147) anchor=None
+edge s1->s2 (359.6782,71.50315) (405.65027,71.50315) anchor=Some((382.66425, 71.50315))
+edge s2->s3 (529.8045,71.50466) (573.56744,71.50466) anchor=None
+edge s3->__end_root__ (736.6289,71.505325) (781.49646,71.506004) anchor=None

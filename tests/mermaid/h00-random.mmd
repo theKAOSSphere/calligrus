@@ -1,0 +1,35 @@
+flowchart RL
+  N1([validate input data 1])
+  N2[[done 2]]
+  N3[load 3]
+  N5((validate input data 5))
+  N7{done 7}
+  N9(parse a long label here 9)
+  subgraph S0 [Group 0]
+    N9
+    N0
+    N1
+    N2
+  end
+  subgraph S1 [Group 1]
+    N2
+    N4
+    N8
+    N7
+  end
+  N1 ---|retry| N2
+  N9 -->|done| N2
+  N3 ==> N7
+  N2 --> N9
+  N9 --x N3
+  N8 -.-> N4
+  N8 -.-> N5
+  N7 --x N6
+  N1 -.-> N4
+  N3 <--> N6
+  N7 --o|load| N9
+  N9 -.->|done| N5
+  N1 --- N0
+  N4 --o N8
+  N9 --> N5
+  N1 -->|x| N7

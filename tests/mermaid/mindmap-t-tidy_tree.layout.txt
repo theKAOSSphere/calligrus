@@ -1,0 +1,30 @@
+size 1519.3164 292.11798
+node Argument_mapping 37.17798 240.41199 185.14493 33.853 hidden=false lines=["Argument mapping"] label=145.73293x24
+node British_popular_psychology_author_Tony_Buzan 1262.0515 78.70599 239.412 57.853 hidden=false lines=["British popular psychology", "author Tony Buzan"] label=200x48
+node Creative_techniques 9.853027 102.70599 212.46985 33.853 hidden=false lines=["Creative techniques"] label=173.05785x24
+node Long_history 1057.6731 9.852997 148.7117 33.853 hidden=false lines=["Long history"] label=109.2997x24
+node Mermaid 1039.4565 240.41199 103.17015 33.853 hidden=false lines=["Mermaid"] label=63.758156x24
+node On_Automatic_creation 373.06808 171.55899 230.68646 33.853 hidden=false lines=["On Automatic creation"] label=191.27446x24
+node On_effectivenessbrand_features 418.60962 9.852997 185.14493 57.853 hidden=false lines=["On effectiveness", "and features"] label=145.73293x48
+node Origins 917.053 56.279495 103.17015 33.853 hidden=false lines=["Origins"] label=63.758156x24
+node Pen_and_paper 1039.4565 171.55899 157.82 33.853 hidden=false lines=["Pen and paper"] label=118.408005x24
+node Popularisation 1057.6731 90.70599 166.92831 33.853 hidden=false lines=["Popularisation"] label=127.51631x24
+node Research 641.2046 125.13249 112.27846 33.853 hidden=false lines=["Research"] label=72.86646x24
+node Strategic_planning 18.961304 171.55899 203.36154 33.853 hidden=false lines=["Strategic planning"] label=163.94954x24
+node Tools 917.053 205.98549 84.95354 33.853 hidden=false lines=["Tools"] label=45.54154x24
+node Uses 259.7729 171.55899 75.84523 33.853 hidden=false lines=["Uses"] label=36.43323x24
+node root 790.933 97.72399 88.67 88.67 hidden=false lines=["mindmap"] label=68.128x24
+edge root->Origins (835.268,142.05899) (968.63806,73.20599) anchor=None
+edge Origins->Long_history (968.63806,73.20599) (1132.029,26.779495) anchor=None
+edge Origins->Popularisation (968.63806,73.20599) (1141.1373,107.63249) anchor=None
+edge Popularisation->British_popular_psychology_author_Tony_Buzan (1141.1373,107.63249) (1381.7574,107.63249) anchor=None
+edge root->Research (835.268,142.05899) (697.34375,142.05899) anchor=None
+edge Research->On_effectivenessbrand_features (697.34375,142.05899) (511.18207,38.779495) anchor=None
+edge Research->On_Automatic_creation (697.34375,142.05899) (488.41132,188.4855) anchor=None
+edge On_Automatic_creation->Uses (488.41132,188.4855) (297.6955,188.4855) anchor=None
+edge Uses->Creative_techniques (297.6955,188.4855) (116.08795,119.63249) anchor=None
+edge Uses->Strategic_planning (297.6955,188.4855) (120.64209,188.48549) anchor=None
+edge Uses->Argument_mapping (297.6955,188.4855) (129.75043,257.3385) anchor=None
+edge root->Tools (835.268,142.05899) (959.5298,222.91199) anchor=None
+edge Tools->Pen_and_paper (959.5298,222.91199) (1118.3666,188.48549) anchor=None
+edge Tools->Mermaid (959.5298,222.91199) (1091.0416,257.3385) anchor=None

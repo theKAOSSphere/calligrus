@@ -1,0 +1,8 @@
+size 350 589
+node C 0 0 150 65 hidden=false lines=["Client"] label=54.64985x24
+node S 200 0 150 65 hidden=false lines=["Server"] label=54.64985x24
+edge C->S (75,157) (275,157) anchor=Some((175.0, 140.2))
+edge S->C (275,203) (75,203) anchor=Some((175.0, 186.2))
+edge C->S (75,306.5) (275,306.5) anchor=Some((175.0, 289.7))
+edge S->C (275,398.5) (75,398.5) anchor=Some((175.0, 381.7))
+edge C->C (75,502) (110,502) (110,537) (75,537) anchor=Some((147.8, 507.14154))

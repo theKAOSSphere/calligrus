@@ -1,0 +1,6 @@
+size 418.76904 96
+node packet_0 8 8 115.78839 72 hidden=false lines=["0-3", "Version"] label=55.788387x42
+node packet_1 167.41475 8 83.90931 72 hidden=false lines=["4-7", "IHL"] label=23.90931x42
+node packet_2 294.9504 8 107.81862 72 hidden=false lines=["8-15", "Length"] label=47.81862x42
+edge packet_0->packet_1 (123.78839,44) (139.05762,44) (152.14552,44) (167.41475,44) anchor=None
+edge packet_1->packet_2 (251.32407,44) (266.5933,44) (279.68118,44) (294.9504,44) anchor=None

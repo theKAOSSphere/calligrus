@@ -1,0 +1,8 @@
+size 187.2997 431.83368
+node X 55.35885 48.5 68.582 51 hidden=false lines=["X"] label=8.582001x21
+node Y 55.498848 129.33366 68.302 51 hidden=false lines=["Y"] label=8.302x21
+node Z 55.589848 328.83368 68.12 51 hidden=false lines=["Z"] label=8.12x21
+edge X->Y (89.64985,99.5) (89.64985,129.33366) anchor=None
+edge Y->Z (89.64985,180.33366) (89.64985,328.83368) anchor=None
+sub "Quoted title" 8 8 163.2997 208.33366
+sub "Empty" 28.589848 288.33368 122.12001 127.5

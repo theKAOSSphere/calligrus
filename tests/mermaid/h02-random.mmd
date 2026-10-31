@@ -1,0 +1,30 @@
+flowchart BT
+  N0((validate input data 0))
+  N2[[retry 2]]
+  N4[[x 4]]
+  N9(x 9)
+  subgraph S0 [Group 0]
+    N0
+    N9
+    N8
+    N1
+  end
+  N7 --x|load| N1
+  N5 <--> N6
+  N6 ==> N9
+  N2 --> N2
+  N9 ==> N3
+  N2 --o N8
+  N4 ==> N5
+  N8 --x N7
+  N8 --o N3
+  N3 <--> N9
+  N9 -.-> N2
+  N8 ==> N0
+  N2 <-->|done| N4
+  N6 --- N4
+  N3 --o N5
+  N2 --- N3
+  N2 --- N9
+  N0 ---|ok| N1
+  N1 --> N1

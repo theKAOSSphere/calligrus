@@ -1,0 +1,4 @@
+size 224.8012 321.34998
+node CUSTOMER 25.533485 8 165.73422 124.424995 hidden=false lines=["CUSTOMER", "---", "string id", "string name"] label=87.667465x84
+node ORDER 8 180.92499 200.8012 124.424995 hidden=false lines=["ORDER", "---", "string id", "date created_at"] label=119.54654x84
+edge CUSTOMER->ORDER (108.4006,132.42499) (108.4006,180.92499) anchor=Some((97.360596, 156.67499))

@@ -1,0 +1,7 @@
+size 900 700
+open zoom.md
+shot z100.png
+keys ctrl+plus ctrl+plus ctrl+plus
+shot z130.png
+keys ctrl+0 ctrl+minus ctrl+minus ctrl+minus
+shot z70.png

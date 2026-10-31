@@ -1,0 +1,6 @@
+# written by Notepad
+theme = "auto"   # follow the system
+zoom = 1.0
+
+[fonts]
+mono = ""

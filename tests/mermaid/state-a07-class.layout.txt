@@ -1,0 +1,8 @@
+size 122.19139 248.47998
+node Crash 25.319052 191.31999 71.55373 41.159996 hidden=false lines=["Crash"] label=39.848846x21
+node Moving 20.935225 110.45999 80.32048 41.159996 hidden=false lines=["Moving"] label=47.81862x21
+node Still 25.317822 45.3 71.55373 41.159996 hidden=false lines=["Still"] label=39.848846x21
+node __start_root__ 54.44379 8 13.3 13.3 hidden=false lines=[""] label=0x21
+edge __start_root__->Still (61.093887,21.3) (61.094685,45.3) anchor=None
+edge Still->Moving (61.094685,86.45999) (61.095463,110.45999) anchor=None
+edge Moving->Crash (61.095463,151.62) (61.095913,191.31999) anchor=Some((61.09569, 171.47))

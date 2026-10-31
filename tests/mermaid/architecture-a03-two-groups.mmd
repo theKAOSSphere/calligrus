@@ -1,0 +1,10 @@
+architecture-beta
+    group g1[Left Group]
+    group g2(cloud)[Right Group]
+    service a(server)[A] in g1
+    service b(database)[B] in g1
+    service c(internet)[C] in g2
+    service d[D] in g2
+    a:R -- L:b
+    c:B -- T:d
+    b:R --> L:c

@@ -1,0 +1,22 @@
+# Spec 28: marks. `m` + letter marks the top of the view (a faint letter in the margin), `'` +
+# letter goes back to it, `''` returns; `A`-`Z` work across files; `*` finds the word under the mouse.
+size 900 500
+open marks.md
+keys j j j j
+keys m a
+keys m B
+shot set.png
+keys G
+keys ' a
+shot jumped.png
+keys ' '
+shot back.png
+open marks-other.md
+keys ' B
+shot global.png
+move 330 140
+keys *
+shot star.png
+keys esc
+keys ' z
+shot unset.png

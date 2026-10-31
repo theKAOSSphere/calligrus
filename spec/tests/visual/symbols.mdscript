@@ -1,0 +1,7 @@
+# Fallback fonts (spec 5): symbols in prose and code; C++ uses the same chains as egui.
+size 900 400
+open symbols.md
+shot top.png
+# Spec 33: Latin Modern Math is CFF, which the PDF subsetter cannot embed: its symbols stay in the picture layer, the rest is real text.
+# expect-pdf-text: symbols.pdf Fallback fonts|installed fonts
+export-pages symbols.pdf

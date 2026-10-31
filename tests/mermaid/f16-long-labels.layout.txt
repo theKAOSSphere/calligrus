@@ -1,0 +1,6 @@
+size 307.15356 417.5692
+node A 8 8 283.15356 72 hidden=false lines=["A rather long label that may", "wrap onto several lines"] label=223.15355x42
+node B 96.77652 130 99.84885 51 hidden=false lines=["Short"] label=39.848846x21
+node C 60.459084 231 170.56921 170.56921 hidden=false lines=["A question with", "a line break?"] label=119.54654x42
+edge A->B (148.97485,80) (148.97485,97.5) (147.1866,112.5) (147.1866,130) anchor=None
+edge B->C (146.29236,181) (146.29236,231.30173) anchor=None

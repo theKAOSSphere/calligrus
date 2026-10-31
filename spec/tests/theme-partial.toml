@@ -1,0 +1,23 @@
+# A partial user theme: dark = true, so every missing (or invalid) [ui] / [doc]
+# key comes from the built-in calligrus-dark.
+name = "my-partial"
+display_name = "My Partial"
+dark = true
+
+[ui]
+panel = "#101820"
+accent = "#FFAA00"           # upper case is fine
+weak = "grey"                # invalid colour -> calligrus-dark's ui.weak
+border = "#abc"              # 3-digit form is not supported -> calligrus-dark's ui.border
+
+[doc]
+bg = "#101820"
+text = "#E8E8E8"
+link = "#7FC8FF80"           # 8-digit form keeps its alpha
+code_bg = "#ffffff"          # 6-digit form gets alpha ff
+# heading is missing: it defaults to this theme's own doc.text (#e8e8e8), not calligrus-dark's
+heading_2 = "#FF8800"        # per-level heading colour
+heading_3 = "orange"         # invalid -> doc.heading
+# heading_1, _4, _5 missing -> doc.heading; heading_6 missing -> doc.weak
+italic = "#C0FFEE"            # emphasis colour
+quote = "nope"               # invalid -> doc.weak; bold missing -> doc.text (never from the base)

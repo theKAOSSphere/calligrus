@@ -1,0 +1,27 @@
+C4Component
+  title Component diagram
+  Container(spa, "Single Page Application", "javascript and angular", "Provides all the internet banking functionality to customers via their web browser.")
+  Container(ma, "Mobile App", "Xamarin", "Provides a limited subset of the internet banking functionality to customers via their mobile device.")
+  ContainerDb(db, "Database", "Relational Database Schema", "Stores user registration information, hashed authentication credentials, access logs, etc.")
+  System_Ext(mbs, "Mainframe Banking System", "Stores all of the core banking information about customers, accounts, transactions, etc.")
+  Container_Boundary(api, "API Application") {
+    Component(sign, "Sign In Controller", "MVC Rest Controller", "Allows users to sign in to the internet banking system")
+    Component(accounts, "Accounts Summary Controller", "MVC Rest Controller", "Provides customers with a summary of their bank accounts")
+    Component(security, "Security Component", "Spring Bean", "Provides functionality related to singing in, changing passwords, etc.")
+    Component_Ext(mbsfacade, "Mainframe Banking System Facade", "Spring Bean", "A facade onto the mainframe banking system.")
+    ComponentDb(cdb, "Cache", "Redis")
+    ComponentQueue(cq, "Events", "Kafka")
+    ComponentDb_Ext(cedb, "Audit", "S3")
+    ComponentQueue_Ext(ceq, "Mail", "SQS")
+  }
+  Rel(sign, security, "Uses")
+  Rel(accounts, mbsfacade, "Uses")
+  Rel(security, db, "Read & write to", "SQL/TCP")
+  Rel(mbsfacade, mbs, "Uses", "XML/HTTPS")
+  Rel(spa, sign, "Uses", "JSON/HTTPS")
+  Rel(spa, accounts, "Uses", "JSON/HTTPS")
+  Rel(ma, sign, "Uses", "JSON/HTTPS")
+  Rel(ma, accounts, "Uses", "JSON/HTTPS")
+  Rel(cdb, cq, "a")
+  Rel(cedb, ceq, "b")
+  Rel(sign, sign, "self")

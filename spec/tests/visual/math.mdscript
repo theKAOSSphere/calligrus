@@ -1,0 +1,7 @@
+# Spec 33: exported as a PDF, the formulas' glyphs are real text (the math font, with ToUnicode): E = mc2, Greek letters,
+# the integral's limits and body; math italic letters copy as plain ones. (Fraction bars and radical bars stay in the picture.)
+# expect-pdf-text: math.pdf E = mc2|α + β = γ|e−x2 dx|(a + b)2 = a2 + 2ab + b2|det A
+size 900 800
+open math.md
+shot top.png
+export-pages math.pdf

@@ -1,0 +1,6 @@
+flowchart LR
+    X[Input] --> A
+    subgraph Pipeline
+        A[Parse] --> B[Layout] --> C[Draw]
+    end
+    C --> Y[Output]

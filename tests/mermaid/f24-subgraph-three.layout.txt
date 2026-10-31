@@ -1,0 +1,14 @@
+size 944.89453 172.755
+node a1 44 48.5 92.242004 51 hidden=false lines=["Read"] label=32.242x21
+node a2 173.32813 48.5 99.84885 51 hidden=false lines=["Parse"] label=39.848846x21
+node b1 417.17697 48.5 86.964005 51 hidden=false lines=["Map"] label=26.964x21
+node b2 541.22705 48.5 107.81862 51 hidden=false lines=["Reduce"] label=47.81862x21
+node c1 793.0457 48.5 99.84885 51 hidden=false lines=["Write"] label=39.848846x21
+edge a1->a2 (136.242,74) (173.32813,74) anchor=None
+edge b1->b2 (504.141,74) (541.22705,74) anchor=None
+edge a2->b1 (273.17697,74) (417.17697,74) anchor=None
+edge b2->c1 (649.0457,74) (649.0457,51.8) (793.0457,51.8) (793.0457,74) anchor=Some((721.0457, 68.0))
+edge a1->c1 (136.242,90) (149.22214,90) (149.22214,156.755) (793.0457,156.755) (793.0457,90) anchor=None
+sub "Transform" 381.17697 8 303.86874 118.5
+sub "Ingest" 8 8 301.17697 118.5
+sub "Emit" 757.0457 8 171.84882 118.5

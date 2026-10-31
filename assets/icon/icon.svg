@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- calligrus icon: an integral sign (TeX math) beside Markdown's down-arrow. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#141417"/>
+      <stop offset="1" stop-color="#141417"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.06"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="url(#bg)"/>
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="url(#shine)"/>
+  <rect x="9" y="9" width="238" height="238" rx="55" fill="none" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2"/>
+  <!-- the integral: a slanted S-curve with ball-ish ends -->
+  <path d="M 150 62 C 136 44, 110 50, 107 78 L 97 178 C 94 206, 68 212, 54 194"
+        fill="none" stroke="#ffffff" stroke-width="20" stroke-linecap="round"/>
+  <!-- Markdown's arrow -->
+  <path d="M 182 92 V 186" fill="none" stroke="#ffc94a" stroke-width="20" stroke-linecap="round"/>
+  <path d="M 152 158 L 182 190 L 212 158" fill="none" stroke="#ffc94a" stroke-width="20"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

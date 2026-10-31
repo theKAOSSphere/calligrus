@@ -1,0 +1,11 @@
+size 486.03836 142.5
+node a 8 41.749947 67.96977 51 hidden=false lines=["a"] label=7.9697695x21
+node b 142.9227 48.5 68.12 51 hidden=false lines=["b"] label=8.12x21
+node c 266.99564 48.5 67.96977 51 hidden=false lines=["c"] label=7.9697695x21
+node d 401.91837 41.75004 68.12 51 hidden=false lines=["d"] label=8.12x21
+node sub1 237.94405 66.25 2 2 hidden=true lines=["sub1"] label=31.879078x21
+edge a->sub1 (75.96977,67.24995) (106.9227,67.24995) anchor=None
+edge b->c (211.0427,74) (266.99564,74) anchor=None
+edge c->d (334.9654,74) (345.79892,74) (391.08484,83.25004) (401.91837,83.25004) anchor=None
+edge sub1->d (370.9654,67.25004) (401.91837,67.25004) anchor=None
+sub "sub1" 106.9227 8 264.0427 118.5

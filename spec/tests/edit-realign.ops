@@ -1,0 +1,5 @@
+set theme "a-really-long-theme-name-xx"
+set dark_theme "nord"
+set light_theme "leuven"
+set show_outline false
+set zoom 2.25

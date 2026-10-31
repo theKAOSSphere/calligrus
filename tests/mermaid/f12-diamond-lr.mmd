@@ -1,0 +1,6 @@
+flowchart LR
+    S((Start)) --> D{Choose}
+    D -->|left| L[Left path]
+    D -->|right| R[Right path]
+    L --> E((End))
+    R --> E

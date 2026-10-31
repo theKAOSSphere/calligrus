@@ -1,0 +1,8 @@
+size 201.67863 204.92
+node Active 8 110.45999 80.32048 41.159996 hidden=false lines=["Active"] label=47.81862x21
+node Idle 16.766354 45.3 62.786987 41.159996 hidden=false lines=["Idle"] label=31.879078x21
+node __end_root__ 41.510464 175.62 13.3 13.3 hidden=false lines=[""] label=0x21
+node __start_root__ 41.5094 8 13.3 13.3 hidden=false lines=[""] label=0x21
+edge __start_root__->Idle (48.159447,21.3) (48.159847,45.3) anchor=None
+edge Idle->Active (48.159847,86.45999) (48.16024,110.45999) anchor=None
+edge Active->__end_root__ (48.16024,151.62) (48.16044,175.62) anchor=None

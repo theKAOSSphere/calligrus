@@ -1,0 +1,11 @@
+size 628.1559 600
+node test_entity 8 8 133.51631 93 hidden=false lines=["<<Element>>", "test_entity", "Type: simulation"] label=127.51631x63
+node test_entity2 406.91168 8 205.24423 114 hidden=false lines=["<<Element>>", "test_entity2", "Type: word doc", "Doc Ref: reqs/test_entity"] label=199.24423x84
+node test_req 191.5163 8 165.39539 156 hidden=false lines=["<<Requirement>>", "test_req", "ID: 1", "Text: the test text.", "Risk: High", "Verification: Test"] label=159.39539x126
+node test_req2 63.922363 218 221.18378 156 hidden=false lines=["<<Functional Requirement>>", "test_req2", "ID: 1.1", "Text: the second test text.", "Risk: Low", "Verification: Inspection"] label=215.18378x126
+node test_req3 63.927757 428 221.18378 156 hidden=false lines=["<<Performance Requirement>>", "test_req3", "ID: 1.2", "Text: the third test text.", "Risk: Medium", "Verification: Demonstration"] label=215.18378x126
+edge test_entity->test_req2 (90.758156,101) (18.6362,101) (18.6362,218) (108.6362,159.5) (126.51425,218) anchor=Some((62.204002, 207.69531))
+edge test_req->test_req2 (226.21399,164) (172.36412,164) (172.36412,218) (232.36412,191) (238.51425,218) anchor=Some((172.36412, 210.81842))
+edge test_req->test_req3 (274.214,164) (330.36682,164) (240.36682,296) (330.36682,428) (206.51965,428) anchor=Some((259.43417, 323.96545))
+edge test_entity2->test_req3 (477.53378,122) (426.02673,122) (366.02673,275) (426.02673,428) (254.51965,428) anchor=Some((387.93198, 330.8584))
+edge test_req2->test_req3 (174.51425,374) (166.51695,401) (106.516945,374) (106.516945,428) (158.51965,428) anchor=Some((106.516945, 380.02405))

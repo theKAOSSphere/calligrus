@@ -1,0 +1,4 @@
+size 387.9798 138
+node e1 8 18.5 133 93 hidden=false lines=["<<Element>>", "e1", "Type: code"] label=87.667465x63
+node r1 238.97981 8 133 114 hidden=false lines=["<<Requirement>>", "r1", "ID: R1", "Text: only one"] label=119.54654x84
+edge e1->r1 (141,65) (238.97981,65) anchor=Some((189.9899, 65.0))

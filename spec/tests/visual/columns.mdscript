@@ -1,0 +1,11 @@
+size 900 700
+open columns.md
+shot normal.png
+keys f5
+shot two.png
+keys right
+shot weighted-step1.png
+keys right
+shot weighted-step2.png
+keys right
+shot weighted-step3.png

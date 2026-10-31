@@ -1,0 +1,16 @@
+size 779.8594 142.50043
+node a 142.71783 48.5 67.96977 51 hidden=false lines=["a"] label=7.9697695x21
+node b 266.43567 48.5 68.12 51 hidden=false lines=["b"] label=8.12x21
+node c 437.3037 48.50042 67.96977 51 hidden=false lines=["c"] label=7.9697695x21
+node d 561.02155 48.50042 68.12 51 hidden=false lines=["d"] label=8.12x21
+node one 237.63675 66.25 2 2 hidden=true lines=["one"] label=23.90931x21
+node two 532.22266 66.25042 2 2 hidden=true lines=["two"] label=23.90931x21
+node x 8 41.749516 67.96977 51 hidden=false lines=["x"] label=7.9697695x21
+node y 695.8896 41.750664 67.96977 51 hidden=false lines=["y"] label=7.9697695x21
+edge a->b (210.6876,74) (266.43567,74) anchor=None
+edge c->d (505.2735,74.00042) (561.02155,74.00042) anchor=None
+edge one->two (370.55566,67.25042) (401.3037,67.25) anchor=None
+edge x->one (75.96977,67.24951) (106.717834,67.24951) anchor=None
+edge two->y (665.14154,67.25066) (695.8896,67.25066) anchor=None
+sub "First" 106.717834 8 263.83783 118.5
+sub "Second" 401.3037 8.00042 263.83783 118.5

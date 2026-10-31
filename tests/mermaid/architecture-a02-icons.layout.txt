@@ -1,0 +1,12 @@
+size 724 328
+node cache 628 56 64 64 hidden=false lines=["Cache"] label=45.54154x24
+node fn 340 56 64 64 hidden=false lines=["Function"] label=72.86646x24
+node gw 196 56 64 64 hidden=false lines=["Gateway"] label=63.758156x24
+node j1 507 79 18 18 hidden=false lines=[""] label=0x24
+node store 340 232 64 64 hidden=false lines=["Bucket"] label=54.64985x24
+node web 52 56 64 64 hidden=false lines=["Web"] label=32.32x24
+edge web->gw (116,88) (196,88) anchor=None
+edge gw->fn (260,88) (340,88) anchor=None
+edge fn->store (372,120) (372,232) anchor=None
+edge fn->j1 (404,88) (507,88) anchor=None
+edge j1->cache (525,88) (628,88) anchor=None

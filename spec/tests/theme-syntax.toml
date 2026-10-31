@@ -1,0 +1,15 @@
+# A small test theme for syntax lookups (loaded by the tests as an extra theme).
+name = "syntax-test"
+display_name = "Syntax Test"
+dark = true
+
+[syntax]
+keyword = "#FF0000   bold"        # upper-case hex, several spaces
+comment = "#00ff00 italic bold"   # both styles, either order
+string = "#0000ff bold italic"
+function = "#123456"
+type = "#abcdef80 italic"         # 8-digit colour keeps its alpha
+"markup.heading" = "#222222 bold"
+# no function.builtin: falls back to function
+# no label (and no prefix of it): plain
+# no string.special.key: falls back to string (string.special is missing too)

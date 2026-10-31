@@ -1,0 +1,9 @@
+flowchart TD
+  U[User] -->|request| G
+  subgraph backend [Backend services]
+    G[Gateway] -->|route| S1[Service A]
+    G -->|route| S2[Service B]
+    S1 -->|query| DB[(Database)]
+    S2 -->|query| DB
+  end
+  DB -->|rows| U

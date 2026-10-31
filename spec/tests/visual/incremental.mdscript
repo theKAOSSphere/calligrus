@@ -1,0 +1,14 @@
+size 900 700
+open incremental.md
+keys f5
+shot first.png
+keys right
+shot item1.png
+keys right
+shot item2.png
+keys right
+shot item3.png
+keys right
+shot last.png
+keys left
+shot back.png

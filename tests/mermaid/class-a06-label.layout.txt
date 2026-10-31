@@ -1,0 +1,6 @@
+size 167.54654 401
+node Animal 8 8 143.54654 91 hidden=false lines=["`Animal Class!`"] label=119.54654x17.850002
+node Bone 34.348648 294 90.84885 91 hidden=false lines=["Bone", "---", "+size"] label=39.848846x53.550003
+node Dog 27.924301 149 103.69769 91 hidden=false lines=["Dog Entity"] label=79.69769x17.850002
+edge Animal->Dog (79.77323,116) (79.77315,149) anchor=None
+edge Dog->Bone (79.77315,240) (79.77308,289) anchor=Some((79.77312, 264.5))

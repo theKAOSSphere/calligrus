@@ -1,0 +1,12 @@
+size 137.83514 270.08002
+node Crash 20.79591 175.62 71.55373 41.159996 hidden=false lines=["Crash"] label=39.848846x21
+node Moving 16.4 110.45999 80.32048 41.159996 hidden=false lines=["Moving"] label=47.81862x21
+node Still 20.781881 45.3 71.55373 41.159996 hidden=false lines=["Still"] label=39.848846x21
+node __end_root__ 49.924324 240.78 13.3 13.3 hidden=false lines=[""] label=0x21
+node __start_root__ 49.90423 8 13.3 13.3 hidden=false lines=[""] label=0x21
+edge __start_root__->Still (56.556732,21.3) (56.556732,45.3) anchor=None
+edge Still->__end_root__ (72.55875,86.45999) (72.55875,92.45999) (121.835144,92.45999) (121.835144,242.81311) (55.91153,242.81311) (55.91153,240.81311) anchor=None
+edge Still->Moving (56.559494,86.45999) (56.559494,110.45999) anchor=None
+edge Moving->Still (16.4,131.04) (8,131.04) (8,102.65999) (12.381882,102.65999) (12.381882,65.88) (20.781881,65.88) anchor=None
+edge Moving->Crash (56.566505,151.62) (56.566505,175.62) anchor=None
+edge Crash->__end_root__ (56.572773,216.78) (56.572773,228.96759) (58.776394,228.96759) (58.776394,241.15517) anchor=None

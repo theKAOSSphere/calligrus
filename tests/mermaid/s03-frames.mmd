@@ -1,0 +1,15 @@
+sequenceDiagram
+    participant C as Client
+    participant S as Server
+    loop every minute
+        C->>S: ping
+        S-->>C: pong
+    end
+    alt ok
+        C->>S: request
+    else failed
+        S-->>C: error
+    end
+    opt cache
+        C->>C: refresh
+    end

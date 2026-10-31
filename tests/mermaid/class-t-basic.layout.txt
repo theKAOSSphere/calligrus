@@ -1,0 +1,4 @@
+size 170.63724 282.21655
+node Animal 8 8 146.63724 113.25001 hidden=false lines=["Animal", "---", "+String name", "---", "+eat()"] label=95.63724x89.25001
+node Dog 57.005604 175.21655 48.626 91 hidden=false lines=["Dog"] label=24.626001x17.850002
+edge Animal->Dog (81.31861,138.25) (81.3186,175.21655) anchor=Some((81.3186, 156.73328))

@@ -1,0 +1,18 @@
+size 900 700
+editor {"type": "open", "doc": "d1", "path": "", "text": "# Live doc\n\nFirst paragraph with a fox in it, and another fox.\n\nSecond paragraph, longer so that it wraps over several lines of the column, mentioning the Fox once more and some filler.\n\n```rust\nfn main() {\n    println!(\"fox\");\n}\n```\n\n- item one\n- item two\n- item three\n\n## End\n\nLast paragraph.\n"}
+shot open.png
+editor {"type": "cursor", "doc": "d1", "line": 1}
+shot cursor-heading.png
+editor {"type": "cursor", "doc": "d1", "line": 8}
+shot cursor-code.png
+editor {"type": "cursor", "doc": "d1", "line": 14}
+shot cursor-list.png
+editor {"type": "search", "doc": "d1", "text": "fox", "case": false}
+shot search-fox.png
+editor {"type": "search", "doc": "d1", "text": "Fox", "case": true}
+shot search-case.png
+editor {"type": "search", "doc": "d1", "text": "", "case": false}
+shot search-cleared.png
+editor {"type": "text", "doc": "d1", "text": "# Live doc (edited)\n\nFirst paragraph with a fox in it, and another fox.\n\nSecond paragraph, longer so that it wraps over several lines of the column, mentioning the Fox once more and some filler.\n\n```rust\nfn main() {\n    println!(\"fox\");\n}\n```\n\n- item one\n- item two\n- item three\n\n## End\n\nLast paragraph.\n"}
+shot text-update.png
+editor {"type": "quit"}

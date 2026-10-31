@@ -1,0 +1,4 @@
+set zoom 1.3
+set show_outline false
+set fonts.prose "C:/fonts/Literata.ttf"
+set code.line_numbers true

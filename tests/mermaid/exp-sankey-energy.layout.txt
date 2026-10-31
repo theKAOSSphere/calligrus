@@ -1,0 +1,18 @@
+size 585 360
+node Grid 287.5 0 10 216 hidden=false lines=["Grid"] label=36.43323x24
+node Industry 575 0 10 162 hidden=false lines=["Industry"] label=72.86646x24
+node Residential 575 108 10 126 hidden=false lines=["Residential"] label=100.19138x24
+node Solar 287.5 216 10 72 hidden=false lines=["Solar"] label=45.54154x24
+node Source 0 0 10 360 hidden=false lines=["Source"] label=54.64985x24
+node Transport 575 180 10 72 hidden=false lines=["Transport"] label=81.97477x24
+node Wind 287.5 288 10 72 hidden=false lines=["Wind"] label=36.624x24
+edge Source->Grid (10,108) (287.5,108) anchor=None
+edge Source->Solar (10,252) (287.5,252) anchor=None
+edge Source->Wind (10,324) (287.5,324) anchor=None
+edge Grid->Industry (297.5,54) (575,54) anchor=None
+edge Grid->Residential (297.5,144) (575,144) anchor=None
+edge Grid->Transport (297.5,198) (575,198) anchor=None
+edge Solar->Residential (297.5,261) (575,261) anchor=None
+edge Solar->Industry (297.5,225) (575,225) anchor=None
+edge Wind->Industry (297.5,306) (575,306) anchor=None
+edge Wind->Transport (297.5,342) (575,342) anchor=None

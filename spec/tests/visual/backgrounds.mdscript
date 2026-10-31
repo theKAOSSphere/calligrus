@@ -1,0 +1,10 @@
+# Marp-style slide backgrounds (spec 26): a strip on either side, or behind the whole slide.
+size 900 700
+open backgrounds.md
+shot doc.png
+keys f5
+shot right.png
+keys right
+shot left.png
+keys right
+shot full.png

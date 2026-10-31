@@ -1,0 +1,8 @@
+size 635.63965 354.05002
+node Animal 217.2849 8 162.57678 148.95001 hidden=false lines=["Animal", "---", "+int age", "+String gender", "---", "+isMammal()", "+mate()"] label=111.576775x124.95001
+node Duck 433.15353 206.95001 186.48608 131.1 hidden=false lines=["Duck", "---", "+String beakColor", "---", "+swim()", "+quack()"] label=135.48608x107.100006
+node Fish 212.607 206.95001 170.54654 113.25001 hidden=false lines=["Fish", "---", "-int sizeInFeet", "---", "-canEat()"] label=119.54654x89.25001
+node Zebra 8 206.95001 154.607 113.25001 hidden=false lines=["Zebra", "---", "+bool is_wild", "---", "+run()"] label=103.607x89.25001
+edge Animal->Duck (362.67703,162.39697) (494.39658,206.95001) anchor=None
+edge Animal->Fish (298.33768,173.94838) (297.88025,206.95001) anchor=None
+edge Animal->Zebra (234.45358,162.34953) (101.3035,206.95001) anchor=None

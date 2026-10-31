@@ -1,0 +1,5 @@
+size 900 900
+open mermaid.md
+shot top.png
+keys G
+shot bottom.png

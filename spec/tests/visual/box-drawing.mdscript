@@ -1,0 +1,4 @@
+# Box drawing (U+2500..): a prose fallback (Cascadia Code), and exact advances for non-Latin-1 code.
+size 900 600
+open box-drawing.md
+shot top.png

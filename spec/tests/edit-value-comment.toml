@@ -1,0 +1,5 @@
+# calligrus configuration
+theme = "auto"            # "auto" or a theme name
+zoom = 1.0                # 0.5 .. 3.0
+body_size = 16            # points
+vim_keys = true

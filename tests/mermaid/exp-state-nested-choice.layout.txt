@@ -1,0 +1,28 @@
+size 250.49731 635.0502
+node Check 49.85636 319.21997 71.55373 41.159996 hidden=false lines=["Check"] label=39.848846x21
+node Decision 33.85636 437.67996 84.51025 84.51025 hidden=false lines=["Decision"] label=63.758156x21
+node Error 146.94359 561.8902 71.55373 41.159996 hidden=false lines=["Error"] label=39.848846x21
+node Idle 94.776306 45.3 62.786987 41.159996 hidden=false lines=["Idle"] label=31.879078x21
+node Parse 33.85636 182.26 71.55373 41.159996 hidden=false lines=["Parse"] label=39.848846x21
+node Processing 120.24866 363.75507 2 2 hidden=true lines=["Processing"] label=79.69769x21
+node Success 33.85636 561.8902 89.08723 41.159996 hidden=false lines=["Success"] label=55.788387x21
+node Validate 84.633224 329.55 2 2 hidden=true lines=["Validate"] label=63.758156x21
+node __end_Validate__ 49.85636 384.37997 13.3 13.3 hidden=false lines=[""] label=0x21
+node __end_root__ 156.76962 8 13.3 13.3 hidden=false lines=[""] label=0x21
+node __start_Processing__ 33.85636 144.95999 13.3 13.3 hidden=false lines=[""] label=0x21
+node __start_Validate__ 49.85636 281.91998 13.3 13.3 hidden=false lines=[""] label=0x21
+node __start_root__ 119.46963 8 13.3 13.3 hidden=false lines=[""] label=0x21
+edge __start_root__->Idle (125.780495,21.299997) (125.780495,45.3) anchor=None
+edge Idle->Processing (135.22092,86.45999) (135.22092,92.45999) (126.1698,104.45999) (126.1698,110.45999) anchor=Some((130.69536, 98.45999))
+edge __start_Processing__->Parse (41.83136,158.12665) (41.83136,164.12665) (69.633224,176.26) (69.633224,182.26) anchor=None
+edge Parse->Validate (69.633224,223.41998) (69.633224,247.41998) anchor=None
+edge __start_Validate__->Check (57.83136,295.08664) (57.83136,301.08664) (85.633224,313.21997) (85.633224,319.21997) anchor=None
+edge Check->__end_Validate__ (85.633224,360.37997) (85.633224,366.37997) (57.83136,378.5133) (57.83136,384.5133) anchor=None
+edge Validate->Decision (76.11148,413.67996) (76.11148,437.67996) anchor=None
+edge Decision->Success (92.11148,506.1902) (92.11148,548.4402) (62.39998,548.4402) (62.39998,561.8902) anchor=Some((91.65573, 548.4402))
+edge Decision->Error (108.11148,490.19022) (108.11148,511.64017) (166.72046,511.64017) (166.72046,561.8902) anchor=Some((151.81601, 511.64017))
+edge Error->Idle (182.72046,561.8902) (182.72046,553.4902) (207.06317,553.4902) (207.06317,94.85999) (145.00589,94.85999) (145.00589,86.45999) anchor=Some((207.06317, 305.3178))
+edge Success->Idle (78.39998,561.8902) (78.39998,565.4902) (10.625458,565.4902) (10.625458,94.85999) (115.65094,94.85999) (115.65094,86.45999) anchor=Some((34.879078, 309.1496))
+edge Success->__end_root__ (94.39998,561.8902) (94.39998,551.6) (167.6,551.6) (167.6,23.599998) (162.90305,23.599998) (162.90305,21.279907) anchor=Some((167.6, 325.8366))
+sub "Processing" 8 110.45999 226.49731 508.59018
+sub "Validate" 33.199997 247.41998 104.86646 166.25998

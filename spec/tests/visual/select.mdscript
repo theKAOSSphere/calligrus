@@ -1,0 +1,6 @@
+size 900 700
+open select.md
+drag 150 150 420 200
+shot drag.png
+keys esc
+shot cleared.png

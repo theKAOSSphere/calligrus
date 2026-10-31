@@ -1,0 +1,6 @@
+stateDiagram-v2
+    [*] --> Waiting
+    Waiting --> Waiting : poll
+    Waiting --> Done : ok
+    Done --> [*]
+    Done --> Waiting : retry

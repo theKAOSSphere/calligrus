@@ -1,0 +1,16 @@
+size 1248 1211
+node SystemA 192 769 200 56 hidden=false lines=["Banking System A"] label=129.296x17
+node SystemAA 920 180 200 137 hidden=false lines=["Internet Banking", "System"] label=121.072x34
+node SystemB 456 769 200 104 hidden=false lines=["Banking System B"] label=129.488x17
+node SystemC 424 482 200 88 hidden=false lines=["E-mail system"] label=102.287994x17
+node SystemD 688 482 200 121 hidden=false lines=["Banking System D", "Database"] label=129.776x34
+node SystemE 160 482 200 137 hidden=false lines=["Mainframe Banking", "System"] label=138.79999x34
+node SystemF 752 769 200 89 hidden=false lines=["Banking System F", "Queue"] label=127.98401x34
+node SystemG 752 922 200 121 hidden=false lines=["Banking System G", "Queue"] label=130.16x34
+node customerA 128 180 200 152 hidden=false lines=["Banking Customer A"] label=145.872x17
+node customerB 392 180 200 99 hidden=false lines=["Banking Customer B"] label=146.064x17
+node customerC 656 180 200 120 hidden=false lines=["Banking Customer C"] label=145.552x17
+edge customerA->SystemAA (328,263.67938) (328,164) (920,164) (920,259.48267) anchor=None
+edge SystemAA->SystemE (920,304.63635) (920,466) (360,466) (360,523.3488) anchor=None
+edge SystemAA->SystemC (941.60114,317) (624,486.82214) anchor=None
+edge SystemC->customerA (485.8407,482) (314.98267,332) anchor=None

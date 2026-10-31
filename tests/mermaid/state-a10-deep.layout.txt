@@ -1,0 +1,18 @@
+size 209.12071 405.81998
+node Inner 49.199997 188.90001 71.55373 41.159996 hidden=false lines=["Inner"] label=39.848846x21
+node Mid 83.97686 199.23 2 2 hidden=true lines=["Mid"] label=23.90931x21
+node Outer 99.560356 203.90999 2 2 hidden=true lines=["Outer"] label=39.848846x21
+node OuterDone 70.5 307.36 106.62072 41.159996 hidden=false lines=["OuterDone"] label=71.72793x21
+node __end_Mid__ 49.199997 254.06 13.3 13.3 hidden=false lines=[""] label=0x21
+node __end_root__ 101.33707 376.52 13.3 13.3 hidden=false lines=[""] label=0x21
+node __start_Mid__ 49.199997 151.6 13.3 13.3 hidden=false lines=[""] label=0x21
+node __start_Outer__ 33.199997 79.8 13.3 13.3 hidden=false lines=[""] label=0x21
+node __start_root__ 101.33684 8 13.3 13.3 hidden=false lines=[""] label=0x21
+edge __start_root__->Outer (107.98684,21.3) (107.98684,45.300003) anchor=None
+edge __start_Outer__->Mid (40.027294,93.09764) (40.027294,99.09764) (41.484295,111.100006) (41.484295,117.100006) anchor=None
+edge __start_Mid__->Inner (57.175,164.76666) (57.175,170.76666) (84.97686,182.90001) (84.97686,188.90001) anchor=None
+edge Inner->__end_Mid__ (84.97686,230.06) (84.97686,236.06) (57.175,248.19333) (57.175,254.19333) anchor=None
+edge Mid->OuterDone (123.810356,283.36) (123.810356,307.36) anchor=None
+edge Outer->__end_root__ (107.98707,364.51996) (107.98707,376.52) anchor=None
+sub "Outer" 8 45.300003 185.12071 319.21997
+sub "Mid" 33.199997 117.100006 103.55373 166.25998

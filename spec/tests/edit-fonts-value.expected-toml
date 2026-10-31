@@ -1,0 +1,6 @@
+zoom = 1.0
+
+[fonts]
+prose_bold = ""          # bold face
+prose = "C:/fonts/Literata.ttf" # body text
+mono = "D:/fonts/Hack.ttf" # a '#' inside the string

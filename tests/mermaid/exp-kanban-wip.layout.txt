@@ -1,0 +1,12 @@
+size 969.39075 152.5
+node b1 16 36 210.86646 44.1 hidden=false lines=["Research"] label=72.86646x24
+node b2 16 86.4 210.86646 44.1 hidden=false lines=["Proposal"] label=72.86646x24
+node d1 459.9163 36 265.5163 44.1 hidden=false lines=["Implementation"] label=127.51631x24
+node d2 496.34952 86.4 192.64984 44.1 hidden=false lines=["Review"] label=54.64985x24
+node f1 745.63257 36 201.75815 44.1 hidden=false lines=["Release"] label=63.758156x24
+node t1 256.17474 36 174.43323 44.1 hidden=false lines=["Spec"] label=36.43323x24
+node t2 247.06645 86.4 192.64984 44.1 hidden=false lines=["Design"] label=54.64985x24
+sub "In Progress" 451.9163 8 281.51633 130.5
+sub "Backlog" 8 8 226.86646 130.5
+sub "To Do" 239.06645 8 208.64986 130.5
+sub "Done" 737.63257 8 217.75818 80.1

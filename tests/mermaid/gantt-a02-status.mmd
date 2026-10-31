@@ -1,0 +1,10 @@
+gantt
+    title Release plan
+    section Dev
+    Design       :done, des1, 2024-01-01, 2024-01-10
+    Build        :active, b1, after des1, 14d
+    Critical fix :crit, c1, after b1, 5d
+    Launch       :milestone, m1, 2024-02-15, 0d
+    section QA
+    Test         :t1, 2024-01-20, 3w
+    Sign off     :after t1, 2d

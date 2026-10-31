@@ -1,0 +1,12 @@
+flowchart TB
+    start([Start]) --> sg1
+    subgraph sg1 [Group One]
+        direction TB
+        p --> q
+        q --> r
+    end
+    sg1 -->|label| sg2
+    subgraph sg2 [Group Two]
+        s --> t
+    end
+    sg2 --> done((End))

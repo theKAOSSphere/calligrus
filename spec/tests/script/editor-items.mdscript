@@ -1,0 +1,15 @@
+# Item-level sync targets and the subtler marker (spec 18), headless.
+size 900 700
+editor {"type": "open", "doc": "i", "path": "", "text": "# Items\n\n- Short item.\n- A much taller second item. It has plenty of words so that it wraps over several visual rows in the reading column, which makes the item clearly taller than its neighbours, and the bar should hug only this one.\n  Second source line of the same item, just to be sure it stays inside.\n- Third, short again.\n\n> [!NOTE]\n> First paragraph of the callout, short.\n>\n> Second paragraph of the callout, which is longer so that it wraps over a couple of rows when the column is narrow enough to need it, and the bar should sit next to this child only.\n\nA plain paragraph that spans\nseveral source lines so that\nthe marker has no tick here.\n\n```rust\nfn main() {\n    println!(\"one\");\n    println!(\"two\");\n    println!(\"three\");\n}\n```\n\nEnd.\n"}
+editor {"type":"cursor","doc":"i","line":4}
+shot editor/items-1-second-item.png
+editor {"type":"cursor","doc":"i","line":11}
+shot editor/items-2-callout-second-paragraph.png
+editor {"type":"cursor","doc":"i","line":8}
+shot editor/items-3-callout-title.png
+editor {"type":"cursor","doc":"i","line":14}
+shot editor/items-4-paragraph-no-tick.png
+editor {"type":"cursor","doc":"i","line":20}
+shot editor/items-5-code-tick.png
+sync-dump editor/items-sync.tsv
+editor {"type":"quit"}

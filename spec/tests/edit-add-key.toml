@@ -1,0 +1,7 @@
+theme = "nord"
+
+[fonts]
+mono = "C:/fonts/Hack.ttf"
+
+[code]
+line_numbers = false

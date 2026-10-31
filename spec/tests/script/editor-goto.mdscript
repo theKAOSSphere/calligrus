@@ -1,0 +1,105 @@
+# Ctrl+click in the preview sends `goto` to the editor (spec 23), headless.
+# The spans between the expect-editor lines are the clicks; every message the app writes goes to
+# <out>/editor-out.jsonl, and `expect-editor` compares the newest one with the JSON given.
+size 900 1400
+editor {"type": "open", "doc": "g", "path": "", "text": "# Title\n\nA single line paragraph.\n\nA wrapped paragraph that spans three source lines and many more visual\n rows, because it keeps going and going with plenty of words so that t\nhe reading column has to break it over several rows of text\n\n## Lists\n\n- first item\n- second item\n  - nested a\n  - nested b\n- third item\n\n```rust\nfn main() {\n    println!(\"hi\");\n}\n```\n\n| h1 | h2 |\n|----|----|\n| a | b |\n| c | d |\n\n$$\nx^2 + y^2 = z^2\n$$\n\n```mermaid\ngraph LR\n  A --> B\n```\n\n> quote first line\n> quote second line\n\n> [!NOTE]\n> callout body\n\nSee [the link](https://example.com/x) here.\n"}
+# heading
+click 300 60 ctrl
+expect-editor {"type": "goto", "doc": "g", "line": 1}
+# single-line paragraph
+click 300 130 ctrl
+expect-editor {"type": "goto", "doc": "g", "line": 3}
+# gap below a paragraph: the block above
+click 300 148 ctrl
+expect-editor {"type": "goto", "doc": "g", "line": 3}
+# wrapped paragraph (source lines 5-7): first third
+click 300 165 ctrl
+expect-editor {"type": "goto", "doc": "g", "line": 5}
+# ... middle third
+click 300 190 ctrl
+expect-editor {"type": "goto", "doc": "g", "line": 6}
+# ... last third
+click 300 220 ctrl
+expect-editor {"type": "goto", "doc": "g", "line": 7}
+# second heading
+click 300 260 ctrl
+expect-editor {"type": "goto", "doc": "g", "line": 9}
+# list item
+click 300 308 ctrl
+expect-editor {"type": "goto", "doc": "g", "line": 11}
+# list item that has a nested list: its first part
+click 300 338 ctrl
+expect-editor {"type": "goto", "doc": "g", "line": 12}
+# nested item inside it
+click 300 368 ctrl
+expect-editor {"type": "goto", "doc": "g", "line": 13}
+# second nested item
+click 300 398 ctrl
+expect-editor {"type": "goto", "doc": "g", "line": 14}
+# last item
+click 300 430 ctrl
+expect-editor {"type": "goto", "doc": "g", "line": 15}
+# code block: the padding above the first line -> first code line (not the fence)
+click 300 461 ctrl
+expect-editor {"type": "goto", "doc": "g", "line": 18}
+# code line 1
+click 300 475 ctrl
+expect-editor {"type": "goto", "doc": "g", "line": 18}
+# code line 2 (indented)
+click 300 490 ctrl
+expect-editor {"type": "goto", "doc": "g", "line": 19}
+# code line 3
+click 300 506 ctrl
+expect-editor {"type": "goto", "doc": "g", "line": 20}
+# code block: the padding below -> the last code line
+click 300 520 ctrl
+expect-editor {"type": "goto", "doc": "g", "line": 20}
+# table header row
+click 300 550 ctrl
+expect-editor {"type": "goto", "doc": "g", "line": 23}
+# table body row 0 (the delimiter row is skipped)
+click 300 585 ctrl
+expect-editor {"type": "goto", "doc": "g", "line": 25}
+# table body row 1
+click 300 625 ctrl
+expect-editor {"type": "goto", "doc": "g", "line": 26}
+# display math: its first line
+click 300 675 ctrl
+expect-editor {"type": "goto", "doc": "g", "line": 28}
+# mermaid diagram: its first line
+click 300 740 ctrl
+expect-editor {"type": "goto", "doc": "g", "line": 32}
+# quote child
+click 300 794 ctrl
+expect-editor {"type": "goto", "doc": "g", "line": 37}
+# callout title (the `> [!NOTE]` line)
+click 300 840 ctrl
+expect-editor {"type": "goto", "doc": "g", "line": 40}
+# callout body
+click 300 870 ctrl
+expect-editor {"type": "goto", "doc": "g", "line": 41}
+# Ctrl+click on a link: goto, the link is not followed
+click 315 904 ctrl
+expect-editor {"type": "goto", "doc": "g", "line": 43}
+# Plain, shift and alt clicks send nothing
+click 300 130
+expect-editor none
+click 300 130 shift
+expect-editor none
+click 300 130 alt
+expect-editor none
+# A document with front matter: the stripped lines are added back (heading is line 4)
+editor {"type": "open", "doc": "fm", "path": "", "text": "---\ntitle: x\n---\n# FM Title\n\nFM paragraph.\n"}
+click 300 60 ctrl
+expect-editor {"type":"goto","doc":"fm","line":4}
+click 300 128 ctrl
+expect-editor {"type":"goto","doc":"fm","line":6}
+# After the editor closes the buffer there is nobody to tell
+editor {"type":"close","doc":"fm"}
+click 300 60 ctrl
+expect-editor none
+# Not an editor document (a file opened from disk): Ctrl+click does nothing new
+open smoke.md
+click 300 100 ctrl
+expect-editor none
+editor {"type":"quit"}

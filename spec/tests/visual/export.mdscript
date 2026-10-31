@@ -1,0 +1,10 @@
+# Spec 27: the toolbar's "PDF" button (and `e` in slides mode) exports the slides as a PDF in a
+# background process; a toast says how it went. `export FILE` is the button without its dialog.
+size 900 600
+open slides.md
+export slides.pdf
+shot normal.png
+keys f5
+keys e
+export in-slides.pdf
+shot slides.png

@@ -1,0 +1,5 @@
+[fonts]
+mono = ""
+
+[code]
+line_numbers = true

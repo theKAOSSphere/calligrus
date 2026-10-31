@@ -1,0 +1,2 @@
+size 1653.1299 629.60004
+node __journey_metrics_content 28 28 1597.1299 573.60004 hidden=false lines=[""] label=0x0

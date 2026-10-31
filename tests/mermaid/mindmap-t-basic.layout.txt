@@ -1,0 +1,8 @@
+size 582.01654 84.68124
+node Child_A 460.99344 21.414114 103.17015 33.853 hidden=false lines=["Child A"] label=63.758156x24
+node Child_B 193.84805 21.414114 103.17015 33.853 hidden=false lines=["Child B"] label=63.758156x24
+node Grandchild 9.852997 21.414114 130.49507 33.853 hidden=false lines=["Grandchild"] label=91.08308x24
+node root 350.51822 9.852999 56.97523 56.97523 hidden=false lines=["Root"] label=36.43323x24
+edge root->Child_A (379.00583,38.340614) (512.5785,38.340614) anchor=None
+edge root->Child_B (379.00583,38.340614) (245.43314,38.340614) anchor=None
+edge Child_B->Grandchild (245.43314,38.340614) (75.100525,38.340614) anchor=None

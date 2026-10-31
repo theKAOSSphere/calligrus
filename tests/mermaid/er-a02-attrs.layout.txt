@@ -1,0 +1,4 @@
+size 286.16843 343.4
+node CUSTOMER 29.916862 8 218.3347 146.47499 hidden=false lines=["CUSTOMER", "---", "string name", "string custNumber", "string sector"] label=135.48608x105
+node ORDER 8 202.97499 262.16843 124.424995 hidden=false lines=["ORDER", "---", "int orderNumber", "string deliveryAddress"] label=175.33493x84
+edge CUSTOMER->ORDER (139.08421,154.47499) (139.08421,202.97499) anchor=Some((128.04422, 178.72499))

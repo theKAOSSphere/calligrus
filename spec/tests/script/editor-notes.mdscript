@@ -1,0 +1,15 @@
+# Slides mode sends each slide's speaker notes to the editor (spec 26), once per slide, headless.
+size 900 700
+editor {"type": "open", "doc": "n", "path": "", "text": "# One\n\ntext\n\n<!-- speaker_note: first notes -->\n\n---\n\n# Two\n\n<!-- speaker_note: |\n  line a\n  line b\n-->\n\n---\n\n# Three\n"}
+expect-editor none
+keys f5
+expect-editor {"type": "notes", "doc": "n", "slide": 1, "total": 3, "notes": "first notes", "line": 1, "end": 8}
+keys right
+expect-editor {"type": "notes", "doc": "n", "slide": 2, "total": 3, "notes": "line a\nline b", "line": 9, "end": 17}
+keys right
+expect-editor {"type": "notes", "doc": "n", "slide": 3, "total": 3, "notes": "", "line": 18, "end": 18}
+keys left
+expect-editor {"type": "notes", "doc": "n", "slide": 2, "total": 3, "notes": "line a\nline b", "line": 9, "end": 17}
+keys esc
+keys f5
+expect-editor {"type": "notes", "doc": "n", "slide": 1, "total": 3, "notes": "first notes", "line": 1, "end": 8}

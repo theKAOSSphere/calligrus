@@ -1,0 +1,4 @@
+size 61.5914 102.45999
+node A 7.999999 45.3 37.5914 41.159996 hidden=false lines=["A"] label=8.974x21
+node __start_root__ 20.145697 8 13.3 13.3 hidden=false lines=[""] label=0x21
+edge __start_root__->A (26.795696,21.3) (26.7957,45.3) anchor=None

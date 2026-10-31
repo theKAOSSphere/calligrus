@@ -1,0 +1,2 @@
+size 226.388 133.88353
+node __gitgraph_metrics_content 6 6 214.388 121.88353 hidden=false lines=[""] label=0x0

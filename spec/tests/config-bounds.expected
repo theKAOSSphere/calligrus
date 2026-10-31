@@ -1,0 +1,17 @@
+body_size = 28
+code.line_numbers = false
+dark_theme = "calligrus-dark"
+editor_marker = true
+fonts.mono = ""
+fonts.prose = ""
+fonts.prose_bold = ""
+fonts.prose_bold_italic = ""
+fonts.prose_italic = ""
+light_theme = "calligrus-light"
+max_width = 2400
+remember_window = true
+show_outline = true
+system_fallback = true
+theme = "calligrus-light"
+vim_keys = true
+zoom = 3.0

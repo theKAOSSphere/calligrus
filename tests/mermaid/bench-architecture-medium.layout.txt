@@ -1,0 +1,5 @@
+size 320 220
+node db 196 56 64 64 hidden=false lines=["DB"] label=21.184002x24
+node web 52 56 64 64 hidden=false lines=["Web"] label=32.32x24
+edge web->db (116,88) (196,88) anchor=None
+sub "API" 24 24 264 164

@@ -1,0 +1,5 @@
+size 443.4997 102.1
+node t1 16 36 192.64984 44.1 hidden=false lines=["Task 1"] label=54.64985x24
+node t2 228.84984 36 192.64984 44.1 hidden=false lines=["Task 2"] label=54.64985x24
+sub "Done" 220.84984 8 208.64986 80.1
+sub "To Do" 8 8 208.64984 80.1

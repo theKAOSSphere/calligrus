@@ -1,0 +1,6 @@
+size 131.81862 252.5899
+node A 11.973373 8 99.84885 51 hidden=false lines=["Plain"] label=39.848846x21
+node B 8 96.79495 107.81862 51 hidden=false lines=["Styled"] label=47.81862x21
+node C 15.381371 185.5899 92.872 51 hidden=false lines=["Done"] label=32.872x21
+edge A->B (61.903553,59) (61.903553,96.79495) anchor=None
+edge B->C (61.86334,147.79495) (61.86334,185.5899) anchor=None

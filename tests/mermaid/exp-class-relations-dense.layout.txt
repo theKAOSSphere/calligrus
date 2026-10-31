@@ -1,0 +1,16 @@
+size 374.61316 579.8109
+node Account 42.025375 310.74063 79.78839 91 hidden=false lines=["Account"] label=55.788387x17.850002
+node AuditLog 37.830994 472.81094 87.758156 91 hidden=false lines=["AuditLog"] label=63.758156x17.850002
+node Permission 196.04239 332.14063 103.69769 91 hidden=false lines=["Permission"] label=79.69769x17.850002
+node Profile 278.82477 170.07031 79.78839 91 hidden=false lines=["Profile"] label=55.788387x17.850002
+node Role 180.81784 170.07031 55.879078 91 hidden=false lines=["Role"] label=31.879078x17.850002
+node Session 11.29303 170.07031 79.78839 91 hidden=false lines=["Session"] label=55.788387x17.850002
+node User 179.01154 8 55.879078 91 hidden=false lines=["User"] label=31.879078x17.850002
+edge User->Account (199.52441,99) (199.52441,89.73188) (148.72198,89.73188) (148.72198,310.74063) (102.91957,310.74063) anchor=None
+edge User->Profile (223.08615,99) (298.9886,166.74103) anchor=None
+edge User->Session (190.81598,99) (71.522,167.57838) anchor=None
+edge Role->Permission (208.75739,261.0703) (230.34363,327.38617) anchor=None
+edge User->Role (208.23283,99) (208.72049,165.07045) anchor=None
+edge Account->AuditLog (81.91957,401.74063) (81.72481,467.81097) anchor=None
+edge Session->Account (51.187225,261.0703) (8,261.0703) (8,310.74063) (60.91957,310.74063) anchor=Some((35.879078, 290.77164))
+edge Profile->Permission (302.71896,261.0703) (316.5818,261.0703) (316.5818,332.14063) (284.89124,332.14063) anchor=Some((316.5818, 305.51932))

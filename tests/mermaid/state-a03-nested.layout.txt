@@ -1,0 +1,20 @@
+size 465.21106 463.68314
+node Active 233.47308 219.68378 2 2 hidden=true lines=["Active"] label=47.81862x21
+node CapsLockOff 243.42494 250.8259 124.15421 41.159996 hidden=false lines=["CapsLockOff"] label=87.667465x21
+node CapsLockOn 243.42494 334.65967 115.38746 41.159996 hidden=false lines=["CapsLockOn"] label=79.69769x21
+node Done 173.66435 406.52313 63.8792 41.159996 hidden=false lines=["Done"] label=32.872x21
+node NumLockOff 101.367004 121.45481 115.38746 41.159996 hidden=false lines=["NumLockOff"] label=79.69769x21
+node NumLockOn 101.367004 205.28862 112.65101 41.159996 hidden=false lines=["NumLockOn"] label=77.21001x21
+node __start_Active__ 101.367004 84.04788 50 8 hidden=false lines=[""] label=0x21
+node __start_root__ 229.77051 8 12.140952 12.140952 hidden=false lines=[""] label=0x21
+edge __start_root__->Active (235.84099,20.140953) (235.84099,49.547882) anchor=None
+edge __start_Active__->NumLockOff (126.367004,92.04788) (126.367004,98.04788) (159.06073,115.45481) (159.06073,121.45481) anchor=None
+edge NumLockOff->NumLockOn (159.06073,162.6148) (159.06073,172.90723) (157.6925,194.9962) (157.6925,205.28862) anchor=Some((158.37662, 183.95172))
+edge NumLockOn->NumLockOff (101.367004,225.86862) (8,225.86862) (8,142.0348) (101.367004,142.0348) anchor=Some((75.86646, 183.95172))
+edge __start_Active__->CapsLockOff (142.367,92.04788) (142.367,98.04788) (251.22284,98.04788) (251.22284,244.8259) (289.50204,244.8259) (289.50204,250.8259) anchor=None
+edge CapsLockOff->CapsLockOn (305.50204,291.9859) (305.50204,302.27832) (301.11865,324.36725) (301.11865,334.65967) anchor=Some((303.31036, 313.32278))
+edge CapsLockOn->CapsLockOff (358.8124,355.23965) (449.21106,355.23965) (449.21106,271.40588) (367.57916,271.40588) anchor=Some((376.79044, 317.70615))
+edge Active->Done (205.60396,391.81967) (205.60396,406.52313) anchor=None
+sub "Active" 85.367004 49.547882 298.21216 342.2718
+sub "" 101.367004 84.04788 115.38746 162.40073
+sub "" 243.42494 250.8259 124.15422 124.993774

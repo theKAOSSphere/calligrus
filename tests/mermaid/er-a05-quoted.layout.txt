@@ -1,0 +1,5 @@
+size 363.13318 255.19998
+node Big Customer 172.63223 8 174.50096 58.274998 hidden=false lines=["Big Customer"] label=95.63724x21
+node LONELY 8 8 124.6322 58.274998 hidden=false lines=["LONELY"] label=50.302002x21
+node Open Order 172.63223 114.774994 174.50096 124.424995 hidden=false lines=["Open Order", "---", "int id", "date created"] label=95.63724x84
+edge Big Customer->Open Order (259.8827,66.274994) (259.8827,114.774994) anchor=Some((270.9227, 90.524994))

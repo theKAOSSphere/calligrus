@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Demo</title>
+  <style>
+    body { margin: 0 auto; color: #333; }
+    .box:hover > a { padding: 4px 1.5em !important; }
+  </style>
+</head>
+<body>
+  <!-- the main box -->
+  <div class="box" id=main>Hello &amp; welcome</div>
+  <script>
+    const items = document.querySelectorAll(".box");
+    for (const el of items) { el.textContent += " (" + 42 + ")"; }
+  </script>
+</body>
+</html>

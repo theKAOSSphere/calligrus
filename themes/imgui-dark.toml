@@ -1,0 +1,92 @@
+# ImGui Classic Dark: after Dear ImGui's StyleColorsDark() by Omar Cornut, https://github.com/ocornut/imgui
+# (MIT licence), imgui_draw.cpp v1.93.0 WIP. [ui] comes from that function: panel = WindowBg (rgb of
+# 0.06 grey, alpha 0.94 dropped), border = Border, widget/hover/active = Button/ButtonHovered/ButtonActive,
+# field = FrameBg, text = Text, weak = TextDisabled, selection = SeparatorActive (a solid blue, so a
+# selected toggle stands apart from the 40% Button blue; TextSelectedBg is too close to it), accent =
+# CheckMark/NavCursor. Translucent colours are flattened onto WindowBg #0f0f0f.
+# ImGui defines no document or code colours: [doc] and [syntax] are designed for this theme to match its
+# blue-accented near-black look, reusing ImGui colours where one fits: link = TextLink, code border =
+# FrameBg, rule = TableBorderStrong, table head = TableHeaderBg, zebra = TableRowBgAlt, quote bar =
+# SliderGrab, inline code = PlotHistogram yellow, error = PlotLinesHovered, find = PlotHistogram(Hovered)
+# at 35% / 55%, comments = TextDisabled.
+name = "imgui-dark"
+display_name = "ImGui Classic Dark"
+dark = true
+
+[ui]
+panel = "#0f0f0f"
+border = "#3e3e48"
+widget = "#23456d"
+widget_hover = "#4296fa"
+widget_active = "#0f87fa"
+text = "#ffffff"
+weak = "#808080"
+field = "#1d2f49"
+selection = "#1a66bf"
+selection_text = "#ffffff"
+accent = "#4296fa"
+
+[doc]
+bg = "#0f0f0f"
+text = "#e6e6e6"
+weak = "#9c9c9c"
+link = "#4296fa"
+heading = "#ffffff"
+code_bg = "#161e2a"
+code_border = "#1d2f49"
+code_fg = "#e6b300"
+rule = "#4f4f59"
+quote_bar = "#3d85e0"
+table_head_bg = "#303033"
+zebra = "#1d1d1d"
+error = "#ff6e59"
+find_match = "#5a480a"
+find_current = "#935b07"
+
+[syntax]
+comment = "#808080 italic"
+keyword = "#4296fa bold"
+conditional = "#4296fa bold"
+repeat = "#4296fa bold"
+preproc = "#ff6e59"
+"punctuation.special" = "#ff9900"
+special = "#ff9900"
+string = "#9fd27a"
+"string.special" = "#e6b300"
+"string.special.key" = "#8cc4ff"
+"string.escape" = "#ff9900"
+"string.regexp" = "#ff9900"
+escape = "#ff9900"
+character = "#9fd27a"
+number = "#ff9900"
+boolean = "#ff9900"
+constant = "#ff9900"
+"constant.character" = "#9fd27a"
+"constant.character.escape" = "#ff9900"
+function = "#e6b300"
+method = "#e6b300"
+"function.builtin" = "#ff6e59"
+type = "#8cc4ff"
+"type.builtin" = "#4296fa"
+constructor = "#8cc4ff"
+module = "#8cc4ff"
+namespace = "#8cc4ff"
+label = "#ff6e59"
+"variable.builtin" = "#ff6e59"
+"variable.parameter" = "#ffb366"
+parameter = "#ffb366"
+"variable.other.member" = "#a8ccf5"
+property = "#a8ccf5"
+field = "#a8ccf5"
+tag = "#4296fa"
+attribute = "#e6b300"
+"markup.heading" = "#4296fa bold"
+"text.title" = "#4296fa bold"
+"markup.raw" = "#e6b300"
+"text.literal" = "#e6b300"
+"markup.link.url" = "#4296fa"
+"text.uri" = "#4296fa"
+"markup.link.label" = "#8cc4ff"
+"text.reference" = "#8cc4ff"
+"markup.italic" = "#e6e6e6 italic"
+"markup.bold" = "#ffffff bold"

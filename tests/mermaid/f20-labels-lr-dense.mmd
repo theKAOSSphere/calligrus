@@ -1,0 +1,7 @@
+flowchart LR
+  S[Start] -->|go| P{Check}
+  P -->|yes| Q[Do it]
+  P -->|no| R[Skip]
+  Q -->|done| E[End]
+  R -->|skipped| E
+  E -->|again| S

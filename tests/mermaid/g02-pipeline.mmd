@@ -1,0 +1,14 @@
+flowchart LR
+  Src[Source] --> Lex[Lexer] --> Parse[Parser] --> AST
+  AST --> Check[Type check]
+  AST --> Opt[Optimiser]
+  Check --> IR
+  Opt --> IR
+  IR --> Gen[Codegen]
+  Gen --> Asm
+  Gen --> Obj
+  Asm --> Link
+  Obj --> Link
+  Link --> Exe
+  Check -->|errors| Diag
+  Parse -->|errors| Diag

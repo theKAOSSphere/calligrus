@@ -1,0 +1,4 @@
+size 221.27448 390
+node req1 31.90931 8 149.45586 156 hidden=false lines=["<<Requirement>>", "req1", "ID: 1", "Text: Login", "Risk: Medium", "Verification: Test"] label=143.45586x126
+node req2 8 218 197.27448 156 hidden=false lines=["<<Requirement>>", "req2", "ID: 2", "Text: Session", "Risk: Low", "Verification: Inspection"] label=191.27448x126
+edge req1->req2 (106.63724,164) (106.63724,218) anchor=Some((106.63724, 191.0))

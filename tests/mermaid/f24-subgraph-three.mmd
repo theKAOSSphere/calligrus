@@ -1,0 +1,13 @@
+flowchart LR
+  subgraph s1 [Ingest]
+    a1[Read] --> a2[Parse]
+  end
+  subgraph s2 [Transform]
+    b1[Map] --> b2[Reduce]
+  end
+  subgraph s3 [Emit]
+    c1[Write]
+  end
+  a2 --> b1
+  b2 -->|result| c1
+  a1 -.-> c1

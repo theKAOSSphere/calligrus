@@ -1,0 +1,27 @@
+size 1248 1013
+node api 128 795 200 114 hidden=false lines=["API Application"] label=111.552x17
+node banking_system 624 126 200 137 hidden=false lines=["Mainframe Banking", "System"] label=138.79999x34
+node customer 96 126 200 152 hidden=false lines=["Customer"] label=70.016x17
+node database 920 428 200 136 hidden=false lines=["Database"] label=67.84x17
+node email_system 360 126 200 88 hidden=false lines=["E-Mail System"] label=102.81601x17
+node ext 392 628 200 72 hidden=false lines=["External thing"] label=99.712x17
+node extdb 656 628 200 72 hidden=false lines=["Ext DB"] label=48.016003x17
+node extq 920 628 200 72 hidden=false lines=["Ext Q"] label=38.16x17
+node mobile_app 656 428 200 136 hidden=false lines=["Mobile App"] label=80.96001x17
+node queue 128 628 200 103 hidden=false lines=["Queue"] label=47.072002x17
+node spa 392 428 200 136 hidden=false lines=["Single-Page App"] label=118.416x17
+node web_app 128 428 200 125 hidden=false lines=["Web Application"] label=117.51999x17
+edge customer->web_app (223.52263,278) (246.80531,428) anchor=None
+edge customer->spa (277.34055,278) (433.02655,428) anchor=None
+edge customer->mobile_app (296,258.0606) (656,446.86957) anchor=None
+edge web_app->spa (328,509.1813) (392,534.10974) anchor=None
+edge spa->api (465.69812,564) (297.3913,795) anchor=None
+edge mobile_app->api (687.3585,564) (687.3585,612) (328,612) (328,804.38855) anchor=None
+edge database->api (920,557.27167) (920,612) (328,612) (328,818.4798) anchor=None
+edge email_system->api (452,214) (258.2784,795) anchor=None
+edge customer->email_system (296,214.0879) (365.0526,214) anchor=None
+edge api->banking_system (284.57285,795) (686.63635,263) anchor=None
+edge queue->ext (328,689.39014) (392,695.40247) anchor=None
+edge extdb->extq (856,673.89014) (920,685.95123) anchor=None
+edge ext->extdb (592,673.89014) (656,685.95123) anchor=None
+edge extq->queue (920,671.4422) (920,612) (328,612) (328,683.5359) anchor=None

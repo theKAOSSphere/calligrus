@@ -1,0 +1,8 @@
+# config: config-dracula.toml
+size 900 700
+open themes.md
+keys ctrl+f
+type find
+shot find.png
+keys esc
+shot top.png

@@ -1,0 +1,12 @@
+size 138 654.3449
+node A 19.050999 8 91.879074 51 hidden=false lines=["Rect"] label=31.879078x21
+node B 9.539722 103.059494 110.9064 53.55 hidden=false lines=["Round"] label=40.823997x21
+node C 9.65596 200.66899 110.678795 110.678795 hidden=false lines=["Diamond"] label=56.504x21
+node D 11.088215 355.4073 107.81862 107.81862 hidden=false lines=["Circle"] label=47.81862x21
+node E 8.9502945 507.2854 112.097694 36 hidden=false lines=["Subroutine"] label=79.69769x21
+node F 8 587.3449 114.00001 51 hidden=false lines=["Asym"] label=35x21
+edge A->B (64.99173,59) (64.99173,103.059494) anchor=None
+edge B->C (64.99414,156.6095) (64.99414,200.66899) anchor=None
+edge C->D (64.996445,311.34778) (64.996445,355.4073) anchor=None
+edge D->E (64.99834,463.2259) (64.99834,507.2854) anchor=None
+edge E->F (64.999146,543.2854) (65,587.3449) anchor=None

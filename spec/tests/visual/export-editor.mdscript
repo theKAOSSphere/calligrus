@@ -1,0 +1,14 @@
+# Spec 27, 29: in editor mode the PDF button exports exactly what the preview shows, unsaved edits
+# included: the editor's text goes to a temp file, the child export reads it, `--base-dir` points at the
+# real document's folder (the picture below resolves there, not in the temp folder). `export-pages` and
+# `export` are the button without its dialog. The text on disk (export-editor.md) is different.
+# expect-pdf-pages: editor-pages.pdf 1
+# expect-pdf-text: editor-pages.pdf UNSAVED-EDIT-MARKER|typed in the editor
+# expect-pdf-pages: editor-slides.pdf 2
+# expect-pdf-text: editor-slides.pdf UNSAVED-EDIT-MARKER|Second slide
+size 900 600
+editor {"type":"open","doc":"d1","path":"export-editor.md","text":"# Unsaved title\n\nUNSAVED-EDIT-MARKER: this paragraph was typed in the editor and never saved.\n\n![sample picture](pic.png)\n\n---\n\n# Second slide\n\nMore text.\n"}
+export-pages editor-pages.pdf
+shot toast-pages.png
+export editor-slides.pdf
+shot toast-slides.png

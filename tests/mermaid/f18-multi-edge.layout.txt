@@ -1,0 +1,6 @@
+size 192.1305 85.50507
+node A 8 8 68.974 51 hidden=false lines=["A"] label=8.974x21
+node B 106.988495 8 69.142 51 hidden=false lines=["B"] label=9.142x21
+edge A->B (76.974,33.5) (106.988495,33.5) anchor=None
+edge A->B (76.974,49.5) (106.988495,49.5) anchor=None
+edge B->A (125.559494,59) (125.559494,69.50507) (58.487,69.50507) (58.487,59) anchor=None

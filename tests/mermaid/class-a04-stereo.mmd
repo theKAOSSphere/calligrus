@@ -1,0 +1,19 @@
+classDiagram
+    class Shape{
+        <<interface>>
+        noOfVertices
+        draw()
+    }
+    class Color{
+        <<enumeration>>
+        RED
+        BLUE
+        GREEN
+    }
+    class Service {
+        <<service>>
+    }
+    Shape <|.. Circle
+    Shape <|.. Square
+    Circle --> Color
+    Service ..> Shape

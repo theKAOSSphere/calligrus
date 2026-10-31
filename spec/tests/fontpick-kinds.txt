@@ -1,0 +1,38 @@
+# Is a [fonts] value a family name or a path? (SPEC.md §8a, README.md §5)
+# A value is a path if it contains "/" or "\" or ends in .ttf/.otf/.ttc (any case);
+# anything else is a family name. Values are taken literally (no trimming, no expansion).
+
+# --- family names --------------------------------------------------------------
+kind Inter => name
+kind JetBrains Mono => name
+kind Fira Code 6.2 => name
+kind Cascadia Code PL => name
+kind St. Mono => name
+kind Noto Sans CJK JP => name
+kind IBM Plex Sans => name
+kind ttf => name
+kind Inter.woff2 => name
+kind Inter.ttf.bak => name
+kind Inter.ttfx => name
+kind C:Inter => name
+
+# --- paths by suffix (any case, no slash needed) ---------------------------------
+kind arial.ttf => path
+kind ARIAL.TTF => path
+kind SourceCodePro-Regular.otf => path
+kind Inter.Otf => path
+kind msgothic.TTC => path
+kind cambria.ttc => path
+kind Fira Code 6.2.ttf => path
+kind .ttf => path
+
+# --- paths by separator (any suffix or none) -------------------------------------
+kind C:\Windows\Fonts\consola.ttf => path
+kind C:/Share/me/fonts/Inter.ttf => path
+kind ~/fonts/Inter-Regular.ttf => path
+kind %LOCALAPPDATA%\Microsoft\Windows\Fonts\Inter.otf => path
+kind /usr/share/fonts/TTF/DejaVuSans.ttf => path
+kind fonts\Inter => path
+kind ./Inter => path
+kind D:\fonts\JetBrains Mono => path
+kind \\server\share\Inter.woff2 => path

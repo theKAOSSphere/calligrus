@@ -1,0 +1,16 @@
+# Spec 27: the right-click menu on a formula has "Copy LaTeX" (a toast says what was copied); a
+# click on a picture or a diagram shows it zoomed over everything; a click or Esc closes it.
+size 900 700
+open zoom-copy.md
+shot top.png
+click 360 132 right
+shot menu.png
+click 402 148
+shot copied.png
+click 150 330
+shot picture.png
+click 450 650
+click 450 440
+shot diagram.png
+keys esc
+shot closed.png

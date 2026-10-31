@@ -1,0 +1,24 @@
+size 1248 821
+node accounts 392 439 200 142 hidden=false lines=["Accounts Summary", "Controller"] label=139.392x34
+node cdb 128 645 200 72 hidden=false lines=["Cache"] label=44.4x17
+node cedb 656 645 200 72 hidden=false lines=["Audit"] label=38.24x17
+node ceq 920 645 200 72 hidden=false lines=["Mail"] label=29.888x17
+node cq 392 645 200 72 hidden=false lines=["Events"] label=48.480003x17
+node db 624 126 200 163 hidden=false lines=["Database"] label=67.84x17
+node ma 360 126 200 136 hidden=false lines=["Mobile App"] label=80.96001x17
+node mbs 888 126 200 137 hidden=false lines=["Mainframe Banking", "System"] label=138.79999x34
+node mbsfacade 920 439 200 142 hidden=false lines=["Mainframe Banking", "System Facade"] label=138.79999x34
+node security 656 439 200 125 hidden=false lines=["Security Component"] label=146.144x17
+node sign 128 439 200 125 hidden=false lines=["Sign In Controller"] label=125.663994x17
+node spa 96 126 200 153 hidden=false lines=["Single Page", "Application"] label=83.216x34
+edge sign->security (328,511.45224) (328,423) (656,423) (656,516.1028) anchor=None
+edge accounts->mbsfacade (592,521.3057) (592,423) (920,423) (920,526.5888) anchor=None
+edge security->db (774.3585,439) (752.6498,289) anchor=None
+edge mbsfacade->mbs (1039.7465,439) (1011.5469,263) anchor=None
+edge spa->sign (222.89215,279) (245.9704,439) anchor=None
+edge spa->accounts (274.89063,279) (433.15857,439) anchor=None
+edge ma->sign (436.0959,262) (312.69388,439) anchor=None
+edge ma->accounts (483.375,262) (511.70612,439) anchor=None
+edge cdb->cq (328,690.89014) (392,702.95123) anchor=None
+edge cedb->ceq (856,690.89014) (920,702.95123) anchor=None
+edge sign->sign (328,564) (328,564) anchor=None

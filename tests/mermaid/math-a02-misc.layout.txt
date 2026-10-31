@@ -1,0 +1,8 @@
+size 203.54654 368.0346
+node A 24.314316 8 147.66747 51 hidden=false lines=["hello ( x )"] label=87.667465x21
+node B 8 105.6782 179.54654 51 hidden=false lines=["a^(n+1)_(k) \\ b"] label=119.54654x21
+node C 39.016228 203.3564 115.78839 51 hidden=false lines=["[ a b ]"] label=55.788387x21
+node D 46.45611 301.0346 99.84885 51 hidden=false lines=["x^(q)"] label=39.848846x21
+edge A->B (97.96066,59) (97.96066,105.6782) anchor=None
+edge B->C (97.34185,156.67819) (97.34185,203.3564) anchor=None
+edge C->D (96.64548,254.3564) (96.64548,301.0346) anchor=None

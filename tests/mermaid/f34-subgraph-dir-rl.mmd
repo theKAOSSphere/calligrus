@@ -1,0 +1,12 @@
+flowchart LR
+  X --> P
+  subgraph one [Vertical]
+    direction TB
+    P --> Q
+    P --> R
+  end
+  subgraph two [Backwards]
+    direction RL
+    S --> T
+  end
+  Q --> S

@@ -1,0 +1,8 @@
+size 540.00244 335.80002
+node BankAccount 194.3783 8 250.24423 166.80002 hidden=false lines=["BankAccount", "---", "+String owner", "+BigDecimal balance", "---", "+deposit(amount) : bool", "+withdrawal(amount) : int", "-audit() : void"] label=199.24423x142.80002
+node Checking 361.42563 224.80002 162.57678 91 hidden=false lines=["Checking", "---", "+overdraft int"] label=111.576775x53.550003
+node Customer 8 228.80002 114.758156 91 hidden=false lines=["Customer", "---", "+name"] label=63.758156x53.550003
+node Savings 172.75815 224.80002 138.66747 91 hidden=false lines=["Savings", "---", "+rate float"] label=87.667465x53.550003
+edge BankAccount->Savings (267.0971,191.21985) (258.0919,224.80002) anchor=None
+edge BankAccount->Checking (391.6273,189.73166) (410.71402,224.80002) anchor=None
+edge Customer->BankAccount (122.75815,258.30002) (192.03368,127.81621) anchor=Some((157.3959, 193.0581))

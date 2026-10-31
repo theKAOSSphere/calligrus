@@ -1,0 +1,12 @@
+build*/
+out/
+report/
+__pycache__/
+*.log
+target/
+editor-out.jsonl
+*.mdscript.log
+
+# Editor swap and backup files
+*.swp
+*~

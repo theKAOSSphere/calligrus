@@ -1,0 +1,20 @@
+requirementDiagram
+    requirement a {
+      id: 1
+      text: styled
+      risk: high
+      verifymethod: analysis
+    }
+    designConstraint b {
+      id: 2
+      text: constraint
+    }
+    interfaceRequirement c {
+      id: 3
+    }
+    physicalRequirement d
+    a - derives -> b
+    b - derives -> c
+    c - traces -> d
+    classDef hot fill:#fdd
+    class a hot

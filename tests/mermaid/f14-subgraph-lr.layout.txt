@@ -1,0 +1,11 @@
+size 684.7139 142.5
+node A 146.0036 48.5 99.84885 51 hidden=false lines=["Parse"] label=39.848846x21
+node B 269.85245 48.5 107.81862 51 hidden=false lines=["Layout"] label=47.81862x21
+node C 401.67108 48.5 92.76 51 hidden=false lines=["Draw"] label=32.760002x21
+node X 8 48.5 99.84885 51 hidden=false lines=["Input"] label=39.848846x21
+node Y 560.8953 48.5 107.81862 51 hidden=false lines=["Output"] label=47.81862x21
+edge X->A (107.84885,74) (146.0036,74) anchor=None
+edge A->B (245.85245,74) (269.85245,74) anchor=None
+edge B->C (377.67108,74) (401.67108,74) anchor=None
+edge C->Y (494.4311,74) (560.8953,74) anchor=None
+sub "Pipeline" 110.0036 8 420.4275 118.5

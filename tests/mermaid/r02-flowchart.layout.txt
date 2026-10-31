@@ -1,0 +1,8 @@
+size 286.23404 262.1748
+node A 75.39328 8 126.024 51 hidden=false lines=["Markdown"] label=66.024x21
+node B 72.442474 101.58741 131.72794 51 hidden=false lines=["calligrus"] label=71.72793x21
+node C 8 195.17482 107.81862 51 hidden=false lines=["Slides"] label=47.81862x21
+node D 158.40604 195.17482 111.828 51 hidden=false lines=["Zoomed"] label=51.828x21
+edge A->B (138.36053,59) (138.36053,101.58741) anchor=None
+edge B->C (110.25466,152.5874) (110.25466,167.493) (98.72543,180.26923) (98.72543,195.17482) anchor=None
+edge B->D (175.01805,152.5874) (175.01805,167.493) (193.60841,180.26923) (193.60841,195.17482) anchor=None

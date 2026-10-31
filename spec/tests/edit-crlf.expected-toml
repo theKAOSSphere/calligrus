@@ -1,0 +1,11 @@
+# written by Notepad
+theme = "auto"   # follow the system
+zoom = 1.3
+show_outline = false
+
+[fonts]
+mono = ""
+prose = "C:/fonts/Literata.ttf"
+
+[code]
+line_numbers = true

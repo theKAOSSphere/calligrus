@@ -1,0 +1,9 @@
+classDiagram
+    Node --> Node : next
+    Node --> Leaf
+    Leaf ..> Node : parent
+    class Node {
+      +value int
+      +next Node
+      +insert(v) void
+    }

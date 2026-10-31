@@ -1,0 +1,10 @@
+theme = "auto"
+# zoom = 2.0
+#zoom = 2.5
+  # vim_keys = false
+zoom = 1.5
+vim_keys = false
+
+[fonts]
+# mono = "C:/fonts/Old.ttf"
+mono = "C:/fonts/Hack.ttf"

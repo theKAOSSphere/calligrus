@@ -1,0 +1,18 @@
+size 851.86334 583.875
+node CARRIER 214.8269 8 165.73422 102.37499 hidden=false lines=["CARRIER", "---", "string name"] label=87.667465x63
+node CUSTOMER 420.56113 8 174.50096 146.47499 hidden=false lines=["CUSTOMER", "---", "string id", "string name", "string email"] label=95.63724x105
+node LINE_ITEM 213.73424 389.44998 174.50096 124.424995 hidden=false lines=["LINE_ITEM", "---", "int quantity", "float price"] label=95.63724x84
+node ORDER 326.62314 202.97499 200.8012 124.424995 hidden=false lines=["ORDER", "---", "string id", "date ordered_at"] label=119.54654x84
+node PRODUCT 101.25508 194.47499 165.73422 146.47499 hidden=false lines=["PRODUCT", "---", "string sku", "string name", "float price"] label=87.667465x105
+node SHIPMENT 428.2352 380.94998 200.8012 102.37499 hidden=false lines=["SHIPMENT", "---", "string tracking"] label=119.54654x63
+node STOCK 8 389.44998 165.73422 102.37499 hidden=false lines=["STOCK", "---", "int on_hand"] label=87.667465x63
+node SUPPLIER 34.763916 8 140.063 58.274998 hidden=false lines=["SUPPLIER"] label=64.33x21
+node WAREHOUSE 635.06213 8 200.8012 124.424995 hidden=false lines=["WAREHOUSE", "---", "string id", "string location"] label=119.54654x84
+edge CUSTOMER->ORDER (475.8116,154.47499) (459.02374,202.97499) anchor=Some((482.88672, 167.78618))
+edge ORDER->LINE_ITEM (363.02374,327.4) (348.9847,389.44998) anchor=Some((369.6597, 348.09833))
+edge PRODUCT->LINE_ITEM (232.1222,340.94998) (252.98471,389.44998) anchor=Some((262.937, 384.64767))
+edge SUPPLIER->PRODUCT (104.79541,66.274994) (168.1222,194.47499) anchor=Some((143.30276, 119.302444))
+edge WAREHOUSE->STOCK (635.06213,86.212494) (635.06213,567.875) (173.73422,567.875) (173.73422,424.63748) anchor=Some((404.3982, 556.835))
+edge PRODUCT->STOCK (136.1222,340.94998) (106.86711,389.44998) anchor=Some((102.22353, 375.77393))
+edge ORDER->SHIPMENT (491.02374,327.4) (480.6358,380.94998) anchor=Some((498.22592, 348.2449))
+edge CARRIER->SHIPMENT (313.69403,110.374985) (313.69403,173.66248) (544.6358,173.66248) (544.6358,380.94998) anchor=Some((359.8824, 162.62248))

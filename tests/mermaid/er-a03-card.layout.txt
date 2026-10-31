@@ -1,0 +1,16 @@
+size 556.661 185.9211
+node A 346.8983 8 79.1714 58.274998 hidden=false lines=["A"] label=8.974x21
+node B 346.8059 111.6461 79.3562 58.274998 hidden=false lines=["B"] label=9.142x21
+node C 233.2464 8 78.8634 58.274998 hidden=false lines=["C"] label=8.694x21
+node D 232.8614 111.6461 79.6334 58.274998 hidden=false lines=["D"] label=9.394x21
+node E 120.37784 8 78.2782 58.274998 hidden=false lines=["E"] label=8.162001x21
+node F 120.48357 111.6461 78.06674 58.274998 hidden=false lines=["F"] label=7.9697695x21
+node G 460.5656 8 80.003 58.274998 hidden=false lines=["G"] label=9.7300005x21
+node H 460.4732 111.6461 80.1878 58.274998 hidden=false lines=["H"] label=9.898001x21
+node I 8 8 78.06674 58.274998 hidden=false lines=["I"] label=7.9697695x21
+node J 8 111.6461 78.06674 58.274998 hidden=false lines=["J"] label=7.9697695x21
+edge A->B (386.484,66.275) (386.484,111.6461) anchor=Some((375.444, 88.154884))
+edge C->D (272.6781,66.274994) (272.6781,111.6461) anchor=Some((261.6381, 93.34921))
+edge E->F (159.51694,66.274994) (159.51694,111.6461) anchor=Some((153.03694, 84.571884))
+edge G->H (500.5671,66.275) (500.5671,111.6461) anchor=Some((485.457, 88.960556))
+edge I->J (47.03337,66.274994) (47.03337,111.6461) anchor=Some((58.07337, 88.96055))

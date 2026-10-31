@@ -1,0 +1,9 @@
+# Keys belong to an open popup: with the recent-files popup open, j / Down move ITS selection and
+# the document must not scroll (the shot shows the top of the page with the popup).
+size 900 600
+open pages.md
+keys ctrl+shift+o
+settle
+keys j down j
+settle
+shot popup.png

@@ -1,0 +1,12 @@
+[package]
+name = "mermaid-oracle"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Must match the mermaid-rs-renderer version the C++ port follows.
+mermaid-rs-renderer = { version = "=0.3.1", default-features = false }
+# --masks: rasterise the SVG exactly like the app (same resvg version as the oracle uses).
+resvg = { version = "=0.47.0", default-features = false, features = ["text"] }
+
+[workspace]

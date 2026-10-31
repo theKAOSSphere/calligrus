@@ -1,0 +1,5 @@
+flowchart TD
+  A[Input] -->|a very long edge label that should wrap across several lines| B[Process]
+  B -->|ok| C[Output]
+  B -->|an error occurred while processing| D[Retry]
+  D --> B

@@ -1,0 +1,8 @@
+size 728 488
+node treemap_0 0 0 720 480 hidden=false lines=["Root", "100"] label=36.43323x48
+node treemap_1 8 64 704 243.00002 hidden=false lines=["Group A", "60"] label=63.758156x48
+node treemap_2 16 128 342.5 171.00002 hidden=false lines=["A1", "30"] label=19.856x48
+node treemap_3 361.5 128 342.5 171.00002 hidden=false lines=["A2", "30"] label=19.856x48
+node treemap_4 8 310 704 162 hidden=false lines=["Group B", "40"] label=63.758156x48
+node treemap_5 16 369.1 342.5 94.9 hidden=false lines=["B1", "20"] label=20.048x48
+node treemap_6 361.5 369.1 342.5 94.9 hidden=false lines=["B2", "20"] label=20.048x48

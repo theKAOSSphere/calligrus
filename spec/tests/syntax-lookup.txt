@@ -1,0 +1,66 @@
+# Syntax lookups: <theme name> <capture name> => <result>
+# <result> is "#rrggbbaa" (lower case) followed by " bold" and/or " italic" (in that
+# order), or "plain". See README.md, "syntax-lookup.txt".
+
+# --- exact entries -------------------------------------------------------------
+calligrus-dark comment => #65737eff italic
+calligrus-dark keyword => #b48eadff bold
+calligrus-dark string => #a3be8cff
+calligrus-light keyword => #a71d5dff bold
+leuven function => #006699ff bold
+dracula variable.parameter => #ffb86cff italic
+dracula type => #8be9fdff italic
+gruvbox-dark function => #b8bb26ff bold
+nord keyword => #81a1c1ff
+catppuccin-mocha conditional => #cba6f7ff italic
+tokyo-night keyword => #9d7cd8ff italic
+solarized-dark comment => #586e75ff italic
+solarized-light string => #2aa198ff
+bearded-vivid-black comment => #50505aff italic
+
+# --- dotted-prefix fallback through grammars/theme.txt ---------------------------
+calligrus-dark function.builtin.call => #96b5b4ff
+calligrus-dark function.method.call => #8fa1b3ff bold
+calligrus-dark keyword.control.import => #b48eadff bold
+calligrus-dark string.special.symbol => #96b5b4ff
+calligrus-dark string.special.key.yaml => #bf616aff
+calligrus-dark constant.character.escape.x => #96b5b4ff
+calligrus-dark comment.documentation => #65737eff italic
+calligrus-dark markup.heading.1.marker => #8fa1b3ff bold
+leuven type.builtin.rust => #006d6dff
+leuven variable.builtin.self => #c01010ff
+nord constant.builtin => #81a1c1ff
+dracula variable.parameter.builtin => #ffb86cff italic
+catppuccin-mocha markup.link.url.autolink => #89b4faff italic
+tokyo-night markup.raw.block => #9ece6aff
+
+# --- plain: "-" entries in theme.txt, no entry at all, helper captures -------------
+calligrus-dark variable => plain
+calligrus-dark variable.member => plain
+calligrus-dark operator => plain
+calligrus-dark punctuation.bracket => plain
+calligrus-dark delimiter => plain
+calligrus-dark embedded => plain
+calligrus-dark none => plain
+calligrus-dark foo => plain
+calligrus-dark foo.bar => plain
+calligrus-dark functional => plain
+calligrus-dark _helper => plain
+calligrus-dark _string.inner => plain
+gruvbox-dark punctuation.delimiter => plain
+
+# --- theme-side fallback and style parsing (theme-syntax.toml, name "syntax-test") --
+syntax-test keyword => #ff0000ff bold
+syntax-test keyword.return => #ff0000ff bold
+syntax-test comment => #00ff00ff bold italic
+syntax-test string => #0000ffff bold italic
+syntax-test function => #123456ff
+syntax-test function.builtin => #123456ff
+syntax-test method => plain
+syntax-test type => #abcdef80 italic
+syntax-test type.builtin => #abcdef80 italic
+syntax-test string.special.key => #0000ffff bold italic
+syntax-test label => plain
+syntax-test markup.heading => #222222ff bold
+syntax-test text.title => plain
+syntax-test variable => plain

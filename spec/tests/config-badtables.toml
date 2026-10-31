@@ -1,0 +1,4 @@
+# A known table given as the wrong type: all of its keys take their defaults.
+fonts = "Hack"
+code = 3
+vim_keys = false

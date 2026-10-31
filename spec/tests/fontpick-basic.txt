@@ -1,0 +1,152 @@
+# Font picking by family name (SPEC.md §8a). Format and rules: README.md §5.
+# Face lines:  family | subfamily | weight | italic | mono | file#face [| width]
+# Query lines: pick <family> => ... / families mono|all => ...
+
+# --- a normal four-style family ---------------------------------------------------
+IBM Plex Sans | Regular     | 400 | 0 | 0 | C:\Windows\Fonts\IBMPlexSans-Regular.ttf#0
+IBM Plex Sans | Bold        | 700 | 0 | 0 | C:\Windows\Fonts\IBMPlexSans-Bold.ttf#0
+IBM Plex Sans | Italic      | 400 | 1 | 0 | C:\Windows\Fonts\IBMPlexSans-Italic.ttf#0
+IBM Plex Sans | Bold Italic | 700 | 1 | 0 | C:\Windows\Fonts\IBMPlexSans-BoldItalic.ttf#0
+
+# --- regular + bold only (mono) ------------------------------------------------------
+Courier Prime | Regular | 400 | 0 | 1 | C:\Windows\Fonts\CourierPrime-Regular.ttf#0
+Courier Prime | Bold    | 700 | 0 | 1 | C:\Windows\Fonts\CourierPrime-Bold.ttf#0
+
+# --- six static weights; italics only at 300/500/600/800 ---------------------------
+# regular 400, bold 700; italic: 300 and 500 tie at 100 from 400 -> the lower (300);
+# bold italic: 600 and 800 tie at 100 from 700 -> the lower (600).
+Inter | Light            | 300 | 0 | 0 | C:\Share\me\AppData\Local\Microsoft\Windows\Fonts\Inter-Light.otf#0
+Inter | Regular          | 400 | 0 | 0 | C:\Share\me\AppData\Local\Microsoft\Windows\Fonts\Inter-Regular.otf#0
+Inter | Medium           | 500 | 0 | 0 | C:\Share\me\AppData\Local\Microsoft\Windows\Fonts\Inter-Medium.otf#0
+Inter | SemiBold         | 600 | 0 | 0 | C:\Share\me\AppData\Local\Microsoft\Windows\Fonts\Inter-SemiBold.otf#0
+Inter | Bold             | 700 | 0 | 0 | C:\Share\me\AppData\Local\Microsoft\Windows\Fonts\Inter-Bold.otf#0
+Inter | ExtraBold        | 800 | 0 | 0 | C:\Share\me\AppData\Local\Microsoft\Windows\Fonts\Inter-ExtraBold.otf#0
+Inter | Light Italic     | 300 | 1 | 0 | C:\Share\me\AppData\Local\Microsoft\Windows\Fonts\Inter-LightItalic.otf#0
+Inter | Medium Italic    | 500 | 1 | 0 | C:\Share\me\AppData\Local\Microsoft\Windows\Fonts\Inter-MediumItalic.otf#0
+Inter | SemiBold Italic  | 600 | 1 | 0 | C:\Share\me\AppData\Local\Microsoft\Windows\Fonts\Inter-SemiBoldItalic.otf#0
+Inter | ExtraBold Italic | 800 | 1 | 0 | C:\Share\me\AppData\Local\Microsoft\Windows\Fonts\Inter-ExtraBoldItalic.otf#0
+
+# --- the >= 600 rule: nothing heavy enough -> bold / bold italic none -----------------
+Lightweight | Light         | 300 | 0 | 0 | D:\fonts\Lightweight-Light.ttf#0
+Lightweight | Regular       | 400 | 0 | 0 | D:\fonts\Lightweight-Regular.ttf#0
+Lightweight | Medium        | 500 | 0 | 0 | D:\fonts\Lightweight-Medium.ttf#0
+Lightweight | Medium Italic | 500 | 1 | 0 | D:\fonts\Lightweight-MediumItalic.ttf#0
+
+# --- no 400 and no 700: regular 200 vs 600 tie -> 200; bold 600 (100) beats 900 (200) --
+Edge Weights | Thin  | 200 | 0 | 0 | D:\fonts\EdgeWeights-Thin.ttf#0
+Edge Weights | SemiBold | 600 | 0 | 0 | D:\fonts\EdgeWeights-SemiBold.ttf#0
+Edge Weights | Black | 900 | 0 | 0 | D:\fonts\EdgeWeights-Black.ttf#0
+Edge Weights | Black Italic | 900 | 1 | 0 | D:\fonts\EdgeWeights-BlackItalic.ttf#0
+
+# --- same weight in two files: the path that sorts first (byte order) wins -----------
+Dup Sans | Regular | 400 | 0 | 0 | D:\fonts\b\DupSans-Regular.ttf#0
+Dup Sans | Regular | 400 | 0 | 0 | D:\fonts\a\DupSans-Regular.otf#0
+Dup Sans | Bold    | 700 | 0 | 0 | D:\fonts\a\DupSans-Bold.otf#0
+Dup Sans | Bold    | 700 | 0 | 0 | C:\Windows\Fonts\DupSans-Bold.ttf#0
+
+# --- TTC collections: every face is indexed; the face index is part of the result ----
+# cambria.ttc holds two families; Collection Serif has two italics at 400 in one file:
+# #2 beats #10 (face index compares as a number).
+Cambria      | Regular     | 400 | 0 | 0 | C:\Windows\Fonts\cambria.ttc#0
+Cambria Math | Regular     | 400 | 0 | 0 | C:\Windows\Fonts\cambria.ttc#1
+Cambria      | Bold        | 700 | 0 | 0 | C:\Windows\Fonts\cambriab.ttf#0
+Cambria      | Italic      | 400 | 1 | 0 | C:\Windows\Fonts\cambriai.ttf#0
+Cambria      | Bold Italic | 700 | 1 | 0 | C:\Windows\Fonts\cambriaz.ttf#0
+Collection Serif | Regular     | 400 | 0 | 0 | D:\fonts\CollectionSerif.ttc#0
+Collection Serif | Bold        | 700 | 0 | 0 | D:\fonts\CollectionSerif.ttc#1
+Collection Serif | Italic      | 400 | 1 | 0 | D:\fonts\CollectionSerif.ttc#10
+Collection Serif | Italic Alt  | 400 | 1 | 0 | D:\fonts\CollectionSerif.ttc#2
+Collection Serif | Bold Italic | 700 | 1 | 0 | D:\fonts\CollectionSerif.ttc#3
+
+# --- variable fonts: one face each (the default instance), weight of that instance -----
+Inter Variable | Regular | 400 | 0 | 0 | C:\Windows\Fonts\InterVariable.ttf#0
+Inter Variable | Italic  | 400 | 1 | 0 | C:\Windows\Fonts\InterVariable-Italic.ttf#0
+Cascadia Code  | Regular | 400 | 0 | 1 | C:\Windows\Fonts\CascadiaCode.ttf#0
+
+# --- italic from the subfamily name ("Oblique"/"Italic") even with the italic bit 0 ----
+DejaVu Sans Mono | Book         | 400 | 0 | 1 | C:\Windows\Fonts\DejaVuSansMono.ttf#0
+DejaVu Sans Mono | Bold         | 700 | 0 | 1 | C:\Windows\Fonts\DejaVuSansMono-Bold.ttf#0
+DejaVu Sans Mono | Oblique      | 400 | 0 | 1 | C:\Windows\Fonts\DejaVuSansMono-Oblique.ttf#0
+DejaVu Sans Mono | Bold Oblique | 700 | 0 | 1 | C:\Windows\Fonts\DejaVuSansMono-BoldOblique.ttf#0
+
+# --- an italic-only family: its italic closest to 400 doubles as regular ----------------
+Script Only | Italic | 400 | 1 | 0 | D:\fonts\ScriptOnly-Italic.ttf#0
+
+# --- family spelled differently in different files (case-insensitive match; listed as
+# spelled on the regular face); only one face is mono -> a monospace family -----------
+FIRA CODE | Bold    | 700 | 0 | 0 | D:\fonts\FiraCode-Bold.ttf#0
+Fira Code | Regular | 400 | 0 | 1 | D:\fonts\FiraCode-Regular.ttf#0
+
+# --- width (optional 7th field, usWidthClass, default 5) ---------------------------------
+# Arial and Arial Narrow share the family "Arial"; the narrow files sort first by bytes
+# ("ARIALN" < "arial") but width closest to 5 wins before weight and path order.
+Arial | Regular            | 400 | 0 | 0 | C:\Windows\Fonts\arial.ttf#0    | 5
+Arial | Bold               | 700 | 0 | 0 | C:\Windows\Fonts\arialbd.ttf#0  | 5
+Arial | Italic             | 400 | 1 | 0 | C:\Windows\Fonts\ariali.ttf#0   | 5
+Arial | Bold Italic        | 700 | 1 | 0 | C:\Windows\Fonts\arialbi.ttf#0  | 5
+Arial | Narrow             | 400 | 0 | 0 | C:\Windows\Fonts\ARIALN.TTF#0   | 3
+Arial | Narrow Bold        | 700 | 0 | 0 | C:\Windows\Fonts\ARIALNB.TTF#0  | 3
+Arial | Narrow Italic      | 400 | 1 | 0 | C:\Windows\Fonts\ARIALNI.TTF#0  | 3
+Arial | Narrow Bold Italic | 700 | 1 | 0 | C:\Windows\Fonts\ARIALNBI.TTF#0 | 3
+
+# Only condensed faces: they are still picked.
+Roboto Condensed | Regular | 400 | 0 | 0 | D:\fonts\RobotoCondensed-Regular.ttf#0 | 3
+Roboto Condensed | Bold    | 700 | 0 | 0 | D:\fonts\RobotoCondensed-Bold.ttf#0    | 3
+Roboto Condensed | Italic  | 400 | 1 | 0 | D:\fonts\RobotoCondensed-Italic.ttf#0  | 3
+
+# Width closeness is per style, among that style's candidates: the only faces >= 600 are
+# condensed, so bold is the closest-width one of those (600 at width 4 beats 700 at
+# width 3), while regular stays the normal-width 400.
+Narrow Bold Sans | Regular                | 400 | 0 | 0 | D:\fonts\NarrowBoldSans-Regular.ttf#0  | 5
+Narrow Bold Sans | Medium                 | 500 | 0 | 0 | D:\fonts\NarrowBoldSans-Medium.ttf#0   | 5
+Narrow Bold Sans | SemiBold SemiCondensed | 600 | 0 | 0 | D:\fonts\NarrowBoldSans-SBSC.ttf#0     | 4
+Narrow Bold Sans | Bold Condensed         | 700 | 0 | 0 | D:\fonts\NarrowBoldSans-BoldCond.ttf#0 | 3
+
+# Width 6 vs 4 is a tie on width (then weight, then path).
+Odd Widths | SemiExpanded       | 400 | 0 | 0 | D:\fonts\b\OddWidths-SemiExpanded.ttf#0      | 6
+Odd Widths | SemiCondensed      | 400 | 0 | 0 | D:\fonts\a\OddWidths-SemiCondensed.ttf#0     | 4
+Odd Widths | SemiExpanded Bold  | 700 | 0 | 0 | D:\fonts\a\OddWidths-SemiExpandedBold.ttf#0  | 6
+Odd Widths | SemiCondensed Bold | 700 | 0 | 0 | D:\fonts\b\OddWidths-SemiCondensedBold.ttf#0 | 4
+
+# An out-of-range width (0) counts as 5 and beats width 4 although its path sorts later.
+Zero Width | Regular       | 400 | 0 | 0 | D:\fonts\b\ZeroWidth-Regular.ttf#0       | 0
+Zero Width | SemiCondensed | 400 | 0 | 0 | D:\fonts\a\ZeroWidth-SemiCondensed.ttf#0 | 4
+
+# Width comes before weight within a style's candidates: with no normal-width 400, the
+# normal-width Bold is closer in width than the semi-condensed Regular, so it is the
+# regular pick too (and the bold pick).
+Width First | SemiCondensed | 400 | 0 | 0 | D:\fonts\WidthFirst-SemiCondensed.ttf#0 | 4
+Width First | Bold          | 700 | 0 | 0 | D:\fonts\WidthFirst-Bold.ttf#0          | 5
+
+# --- queries ----------------------------------------------------------------------------
+pick IBM Plex Sans => regular=C:\Windows\Fonts\IBMPlexSans-Regular.ttf#0 bold=C:\Windows\Fonts\IBMPlexSans-Bold.ttf#0 italic=C:\Windows\Fonts\IBMPlexSans-Italic.ttf#0 bold_italic=C:\Windows\Fonts\IBMPlexSans-BoldItalic.ttf#0
+pick ibm plex sans => regular=C:\Windows\Fonts\IBMPlexSans-Regular.ttf#0 bold=C:\Windows\Fonts\IBMPlexSans-Bold.ttf#0 italic=C:\Windows\Fonts\IBMPlexSans-Italic.ttf#0 bold_italic=C:\Windows\Fonts\IBMPlexSans-BoldItalic.ttf#0
+pick IBM PLEX SANS => regular=C:\Windows\Fonts\IBMPlexSans-Regular.ttf#0 bold=C:\Windows\Fonts\IBMPlexSans-Bold.ttf#0 italic=C:\Windows\Fonts\IBMPlexSans-Italic.ttf#0 bold_italic=C:\Windows\Fonts\IBMPlexSans-BoldItalic.ttf#0
+pick Courier Prime => regular=C:\Windows\Fonts\CourierPrime-Regular.ttf#0 bold=C:\Windows\Fonts\CourierPrime-Bold.ttf#0 italic=none bold_italic=none
+pick Inter => regular=C:\Share\me\AppData\Local\Microsoft\Windows\Fonts\Inter-Regular.otf#0 bold=C:\Share\me\AppData\Local\Microsoft\Windows\Fonts\Inter-Bold.otf#0 italic=C:\Share\me\AppData\Local\Microsoft\Windows\Fonts\Inter-LightItalic.otf#0 bold_italic=C:\Share\me\AppData\Local\Microsoft\Windows\Fonts\Inter-SemiBoldItalic.otf#0
+pick Lightweight => regular=D:\fonts\Lightweight-Regular.ttf#0 bold=none italic=D:\fonts\Lightweight-MediumItalic.ttf#0 bold_italic=none
+pick Edge Weights => regular=D:\fonts\EdgeWeights-Thin.ttf#0 bold=D:\fonts\EdgeWeights-SemiBold.ttf#0 italic=D:\fonts\EdgeWeights-BlackItalic.ttf#0 bold_italic=D:\fonts\EdgeWeights-BlackItalic.ttf#0
+pick Dup Sans => regular=D:\fonts\a\DupSans-Regular.otf#0 bold=C:\Windows\Fonts\DupSans-Bold.ttf#0 italic=none bold_italic=none
+pick Cambria => regular=C:\Windows\Fonts\cambria.ttc#0 bold=C:\Windows\Fonts\cambriab.ttf#0 italic=C:\Windows\Fonts\cambriai.ttf#0 bold_italic=C:\Windows\Fonts\cambriaz.ttf#0
+pick cambria math => regular=C:\Windows\Fonts\cambria.ttc#1 bold=none italic=none bold_italic=none
+pick Collection Serif => regular=D:\fonts\CollectionSerif.ttc#0 bold=D:\fonts\CollectionSerif.ttc#1 italic=D:\fonts\CollectionSerif.ttc#2 bold_italic=D:\fonts\CollectionSerif.ttc#3
+pick Inter Variable => regular=C:\Windows\Fonts\InterVariable.ttf#0 bold=none italic=C:\Windows\Fonts\InterVariable-Italic.ttf#0 bold_italic=none
+pick Cascadia Code => regular=C:\Windows\Fonts\CascadiaCode.ttf#0 bold=none italic=none bold_italic=none
+pick DejaVu Sans Mono => regular=C:\Windows\Fonts\DejaVuSansMono.ttf#0 bold=C:\Windows\Fonts\DejaVuSansMono-Bold.ttf#0 italic=C:\Windows\Fonts\DejaVuSansMono-Oblique.ttf#0 bold_italic=C:\Windows\Fonts\DejaVuSansMono-BoldOblique.ttf#0
+pick Script Only => regular=D:\fonts\ScriptOnly-Italic.ttf#0 bold=none italic=D:\fonts\ScriptOnly-Italic.ttf#0 bold_italic=none
+pick fira code => regular=D:\fonts\FiraCode-Regular.ttf#0 bold=D:\fonts\FiraCode-Bold.ttf#0 italic=none bold_italic=none
+pick FIRA CODE => regular=D:\fonts\FiraCode-Regular.ttf#0 bold=D:\fonts\FiraCode-Bold.ttf#0 italic=none bold_italic=none
+pick Arial => regular=C:\Windows\Fonts\arial.ttf#0 bold=C:\Windows\Fonts\arialbd.ttf#0 italic=C:\Windows\Fonts\ariali.ttf#0 bold_italic=C:\Windows\Fonts\arialbi.ttf#0
+pick Roboto Condensed => regular=D:\fonts\RobotoCondensed-Regular.ttf#0 bold=D:\fonts\RobotoCondensed-Bold.ttf#0 italic=D:\fonts\RobotoCondensed-Italic.ttf#0 bold_italic=none
+pick Narrow Bold Sans => regular=D:\fonts\NarrowBoldSans-Regular.ttf#0 bold=D:\fonts\NarrowBoldSans-SBSC.ttf#0 italic=none bold_italic=none
+pick Odd Widths => regular=D:\fonts\a\OddWidths-SemiCondensed.ttf#0 bold=D:\fonts\a\OddWidths-SemiExpandedBold.ttf#0 italic=none bold_italic=none
+pick Zero Width => regular=D:\fonts\b\ZeroWidth-Regular.ttf#0 bold=none italic=none bold_italic=none
+pick Width First => regular=D:\fonts\WidthFirst-Bold.ttf#0 bold=D:\fonts\WidthFirst-Bold.ttf#0 italic=none bold_italic=none
+
+# unknown families: no prefix or fuzzy matching
+pick Comic Sans MS => not found
+pick Inter Var => not found
+pick Cambria Mat => not found
+
+families mono => Cascadia Code | Courier Prime | DejaVu Sans Mono | Fira Code
+families all => Arial | Cambria | Cambria Math | Cascadia Code | Collection Serif | Courier Prime | DejaVu Sans Mono | Dup Sans | Edge Weights | Fira Code | IBM Plex Sans | Inter | Inter Variable | Lightweight | Narrow Bold Sans | Odd Widths | Roboto Condensed | Script Only | Width First | Zero Width

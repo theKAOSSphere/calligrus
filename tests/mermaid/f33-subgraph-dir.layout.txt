@@ -1,0 +1,11 @@
+size 349.39926 432.53125
+node A 35 115.64732 68.974 51 hidden=false lines=["A"] label=8.974x21
+node B 136.26865 115.64732 69.142 51 hidden=false lines=["B"] label=9.142x21
+node C 237.70526 115.64732 68.694 51 hidden=false lines=["C"] label=8.694x21
+node End 27.452568 365.53125 84.234 51 hidden=false lines=["End"] label=24.234001x21
+node Start 19.648968 8 99.84885 51 hidden=false lines=["Start"] label=39.848846x21
+edge Start->A (69.5302,59) (69.5302,115.64732) anchor=None
+edge A->B (103.974,141.14732) (136.26865,141.14732) anchor=None
+edge B->C (205.41064,141.14732) (237.70526,141.14732) anchor=None
+edge C->End (251.38943,166.64732) (251.38943,177.95045) (106.2324,354.22812) (106.2324,365.53125) anchor=None
+sub "Inner LR" 8 75.14732 325.39926 127.50001

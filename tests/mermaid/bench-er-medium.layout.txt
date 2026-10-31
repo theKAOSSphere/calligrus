@@ -1,0 +1,10 @@
+size 417.38525 711.2999
+node CUSTOMER 213.73422 8 174.50096 146.47499 hidden=false lines=["CUSTOMER", "---", "string id", "string name", "string email"] label=95.63724x105
+node LINE_ITEM 213.73419 375.9 174.50096 124.424995 hidden=false lines=["LINE_ITEM", "---", "int quantity", "float price"] label=95.63724x84
+node ORDER 200.58408 202.97499 200.8012 124.424995 hidden=false lines=["ORDER", "---", "string id", "date ordered_at"] label=119.54654x84
+node PRODUCT 218.11757 548.82495 165.73422 146.47499 hidden=false lines=["PRODUCT", "---", "string sku", "string name", "float price"] label=87.667465x105
+node SUPPLIER 7.9999924 8 165.73422 124.424995 hidden=false lines=["SUPPLIER", "---", "string id", "string name"] label=87.667465x84
+edge CUSTOMER->ORDER (300.98468,154.47499) (300.98468,202.97499) anchor=Some((289.94467, 178.72499))
+edge ORDER->LINE_ITEM (300.98468,327.4) (300.98468,375.9) anchor=Some((289.94467, 351.65))
+edge LINE_ITEM->PRODUCT (300.98468,500.32498) (316.98468,548.82495) anchor=Some((293.70047, 513.4837))
+edge SUPPLIER->PRODUCT (106.8671,132.42499) (163.92589,132.42499) (163.92589,548.82495) (268.98468,548.82495) anchor=Some((152.8859, 548.82495))

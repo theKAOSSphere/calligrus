@@ -1,0 +1,4 @@
+size 103.78839 303.88342
+node Class01 8 8 79.78839 91 hidden=false lines=["Class01"] label=55.788387x17.850002
+node Class02 8 196.88342 79.78839 91 hidden=false lines=["Class02"] label=55.788387x17.850002
+edge Class01->Class02 (47.894196,99) (47.894196,196.88342) anchor=Some((47.894196, 147.94171))

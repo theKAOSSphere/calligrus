@@ -1,0 +1,9 @@
+# Marp image filters and several background pictures on one slide (spec 26).
+size 900 700
+open bg-filters.md
+keys f5
+shot row.png
+keys right
+shot stacked.png
+keys right
+shot faded.png

@@ -1,0 +1,8 @@
+size 665.4578 152.5
+node t1 25.108307 36 174.43323 44.1 hidden=false lines=["Spec"] label=36.43323x24
+node t2 16 86.4 192.64984 44.1 hidden=false lines=["Design"] label=54.64985x24
+node t3 228.84984 36 219.97476 44.1 hidden=false lines=["Implement"] label=81.97477x24
+node t4 469.0246 36 174.43323 44.1 hidden=false lines=["Test"] label=36.43323x24
+sub "To Do" 8 8 208.64984 130.5
+sub "In Progress" 220.84984 8 235.97475 80.1
+sub "Done" 461.0246 8 190.43323 80.1

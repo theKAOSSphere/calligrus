@@ -1,0 +1,7 @@
+size 555.8727 158.2128
+node A 8 48.8564 171.57678 51 hidden=false lines=["Write Markdown"] label=111.576775x21
+node B 233.4017 48.856396 123.758156 51 hidden=false lines=["Press F5"] label=63.758156x21
+node C 407.15985 8 132.7128 132.7128 hidden=false lines=["Presenting"] label=79.69769x21
+edge A->B (179.57678,74.3564) (233.4017,74.3564) anchor=None
+edge B->C (357.15985,74.3564) (407.15985,74.3564) anchor=None
+edge C->A (457.51624,124.7128) (457.51624,142.2128) (125.78839,142.2128) (125.78839,99.8564) anchor=Some((291.6523, 126.0128))

@@ -1,0 +1,5 @@
+size 656 535
+node admin 96 126 200 99 hidden=false lines=["Admin"] label=46.592003x17
+node db 128 375 200 56 hidden=false lines=["DB"] label=21.184002x17
+node sys 360 126 200 56 hidden=false lines=["System"] label=53.440002x17
+edge admin->sys (296,183.1923) (367.23233,182) anchor=None

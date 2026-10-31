@@ -1,0 +1,19 @@
+size 589.71515 115.659996
+node Error 464.86145 33.2575 71.55373 41.159996 hidden=false lines=["Error"] label=39.848846x21
+node Idle 45.3 33.24909 62.786987 41.159996 hidden=false lines=["Idle"] label=31.879078x21
+node Reading 185.387 42.5 89.08723 41.159996 hidden=false lines=["Reading"] label=55.788387x21
+node Working 285.47424 52.829998 2 2 hidden=true lines=["Working"] label=55.788387x21
+node Writing 298.4742 42.5 89.08723 41.159996 hidden=false lines=["Writing"] label=55.788387x21
+node __end_Working__ 411.56146 42.5 13.3 13.3 hidden=false lines=[""] label=0x21
+node __end_root__ 560.41516 47.188393 13.3 13.3 hidden=false lines=[""] label=0x21
+node __start_Working__ 148.08699 42.5 13.3 13.3 hidden=false lines=[""] label=0x21
+node __start_root__ 8 47.175743 13.3 13.3 hidden=false lines=[""] label=0x21
+edge __start_root__->Idle (21.3,53.8276) (45.3,53.8276) anchor=None
+edge Idle->Working (108.08699,53.829086) (132.08699,53.829086) anchor=Some((120.08699, 53.829086))
+edge __start_Working__->Reading (161.25365,50.475) (167.25365,50.475) (179.387,63.079998) (185.387,63.079998) anchor=None
+edge Reading->Writing (274.4742,63.079998) (298.4742,63.079998) anchor=None
+edge Writing->__end_Working__ (387.56143,63.079998) (393.56143,63.079998) (405.6948,50.475) (411.6948,50.475) anchor=None
+edge Working->Idle (133.08699,52.829086) (133.08699,26.839087) (92.6935,26.839087) (92.6935,33.24909) anchor=Some((122.680244, 26.839087))
+edge Working->Error (440.86145,53.8375) (464.86145,53.8375) anchor=None
+edge Error->__end_root__ (536.41516,53.8375) (560.41516,53.838295) anchor=None
+sub "Working" 132.08699 8 308.77448 91.659996

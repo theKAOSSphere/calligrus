@@ -1,0 +1,9 @@
+size 320 396
+node db 196 56 64 64 hidden=false lines=["Database"] label=72.86646x24
+node disk1 52 232 64 64 hidden=false lines=["Storage"] label=63.758156x24
+node disk2 196 232 64 64 hidden=false lines=["Storage"] label=63.758156x24
+node server 52 56 64 64 hidden=false lines=["Server"] label=54.64985x24
+edge db->server (196,88) (116,88) anchor=None
+edge disk1->server (84,232) (84,120) anchor=None
+edge disk2->db (228,232) (228,120) anchor=None
+sub "API" 24 24 264 340

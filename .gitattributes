@@ -1,0 +1,15 @@
+# Text files are stored and checked out with LF line endings on every OS.
+* text=auto eol=lf
+
+# Test data keeps its exact bytes: some fixtures are CRLF on purpose (e.g. edit-crlf.toml checks
+# that the config editor keeps Windows line endings).
+spec/tests/** -text
+tests/** -text
+
+# Binary files.
+*.png binary
+*.ico binary
+*.ttf binary
+*.otf binary
+*.pdf binary
+*.webp binary

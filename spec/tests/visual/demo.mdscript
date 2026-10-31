@@ -1,0 +1,5 @@
+size 1000 800
+open ../../../assets/demo.md
+shot top.png
+keys G
+shot bottom.png

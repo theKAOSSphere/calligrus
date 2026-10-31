@@ -1,0 +1,8 @@
+stateDiagram-v2
+    classDef notMoving fill:white
+    classDef movement font-style:italic
+    [*] --> Still
+    Still --> Moving
+    class Still notMoving
+    class Moving movement
+    Moving --> Crash:::notMoving

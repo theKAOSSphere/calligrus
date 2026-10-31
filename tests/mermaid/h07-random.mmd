@@ -1,0 +1,42 @@
+flowchart RL
+  N0{parse a long label here 0}
+  N1[[done 1]]
+  N2{x 2}
+  N3((ok 3))
+  N5[[parse a long label here 5]]
+  N8{load 8}
+  N9(load 9)
+  N10(retry 10)
+  N11(ok 11)
+  N12{{done 12}}
+  subgraph S0 [Group 0]
+    N3
+    N7
+  end
+  subgraph S1 [Group 1]
+    N9
+    N5
+    N8
+    N1
+  end
+  N10 --x N3
+  N7 <--> N7
+  N8 ==> N7
+  N9 --x|retry| N9
+  N11 -.-> N1
+  N4 --o|validate input data| N0
+  N8 ==>|retry| N9
+  N10 --o N10
+  N9 ==> N8
+  N6 ==>|validate input data| N6
+  N12 <--> N12
+  N10 -.-> N6
+  N2 -->|parse a long label here| N2
+  N6 --- N3
+  N7 <-->|validate input data| N1
+  N9 --- N8
+  N6 --- N4
+  N2 --- N7
+  N6 -->|validate input data| N10
+  N1 --- N4
+  N10 ==> N7

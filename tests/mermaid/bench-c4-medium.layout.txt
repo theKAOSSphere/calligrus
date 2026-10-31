@@ -1,0 +1,11 @@
+size 1184 535
+node admin 96 126 200 99 hidden=false lines=["Admin"] label=46.592003x17
+node api 128 375 200 56 hidden=false lines=["API"] label=26.352x17
+node db 888 126 200 56 hidden=false lines=["Main DB"] label=59.584003x17
+node sys 624 126 200 56 hidden=false lines=["Inventory"] label=69.664x17
+node user 360 126 200 99 hidden=false lines=["User"] label=33.296x17
+node worker 392 375 200 56 hidden=false lines=["Worker"] label=52.176003x17
+edge admin->sys (296,179.9586) (296,110) (624,110) (624,165.56541) anchor=None
+edge user->sys (560,183.1923) (631.2323,182) anchor=None
+edge sys->db (824,161.6923) (888,171.07317) anchor=None
+edge api->worker (328,410.69232) (392,420.07318) anchor=None
