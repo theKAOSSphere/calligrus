@@ -3,8 +3,9 @@
   "version-string": "0.1.0",
   "builtin-baseline": "04a9d8e5212d01ee1dd9478eadd9caade4f8b0d4",
   "dependencies": [
-    { "name": "imgui", "features": ["glfw-binding", "opengl3-binding", "wchar32", "freetype"] },
-    "glfw3",
+    { "name": "imgui", "platform": "!android", "features": ["glfw-binding", "opengl3-binding", "wchar32", "freetype"] },
+    { "name": "imgui", "platform": "android", "features": ["opengl3-binding", "wchar32", "freetype"] },
+    { "name": "glfw3", "platform": "!android" },
     "md4c",
     "stb",
     "libwebp",
