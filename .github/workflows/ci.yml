@@ -159,3 +159,79 @@ jobs:
             spec/tests/visual/report
             spec/tests/visual/out
           if-no-files-found: ignore
+
+  # The unsigned release APK (arm64-v8a). Build only: no emulator, no tests.
+  android:
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_NDK_VERSION: 27.2.12479018
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      # Restore here, save right after the build (below), as in the other jobs.
+      - name: Restore vcpkg binary packages
+        id: vcpkg-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .vcpkg-cache
+          key: vcpkg-android-${{ hashFiles('vcpkg.json', 'cmake/triplets/*.cmake') }}
+          restore-keys: vcpkg-android-
+
+      # The runner has an Android SDK; sdkmanager adds what the Gradle files pin (it skips what is installed).
+      - name: Install Android SDK packages
+        run: |
+          sdk="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          sdkmanager="$sdk/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$sdkmanager" --licenses > /dev/null || true
+          "$sdkmanager" "platforms;android-36" "build-tools;36.0.0" "cmake;3.22.1" "ndk;$ANDROID_NDK_VERSION"
+          echo "ANDROID_HOME=$sdk" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$sdk/ndk/$ANDROID_NDK_VERSION" >> "$GITHUB_ENV"
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build git curl zip unzip tar pkg-config autoconf autoconf-archive automake libtool
+
+      - name: Get vcpkg at the manifest baseline
+        run: |
+          mkdir -p .vcpkg-cache
+          baseline=$(python3 -c "import json; print(json.load(open('vcpkg.json'))['builtin-baseline'])")
+          git init "$HOME/vcpkg"
+          git -C "$HOME/vcpkg" remote add origin https://github.com/microsoft/vcpkg
+          git -C "$HOME/vcpkg" fetch --depth 1 origin "$baseline"
+          git -C "$HOME/vcpkg" checkout FETCH_HEAD
+          "$HOME/vcpkg/bootstrap-vcpkg.sh" -disableMetrics
+          echo "VCPKG_ROOT=$HOME/vcpkg" >> "$GITHUB_ENV"
+
+      # The overlay triplets (cmake/triplets) are picked by CMakeLists.txt from the ABI; no secrets, so the
+      # release APK stays unsigned. `sh gradlew`: the file is not stored executable.
+      - name: Build (Release, arm64-v8a, unsigned)
+        working-directory: android
+        run: sh gradlew assembleRelease -PcalligrusAbis=arm64-v8a
+
+      - name: Save vcpkg binary packages
+        if: always() && steps.vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .vcpkg-cache
+          key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}
+
+      - name: Name the APK
+        run: |
+          mkdir -p dist
+          cp android/app/build/outputs/apk/release/app-release-unsigned.apk "dist/calligrus-${GITHUB_SHA::7}-unsigned.apk"
+          ls -l dist
+
+      - name: Upload the unsigned APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: calligrus-android-unsigned
+          path: dist/*.apk
+          retention-days: 14
+          if-no-files-found: error
