@@ -33,6 +33,57 @@ sudo apt install build-essential cmake ninja-build git curl zip unzip tar pkg-co
 `build.sh` finds vcpkg in `$VCPKG_ROOT`, `~/vcpkg`, `/opt/vcpkg` or `/usr/local/vcpkg`, and clones it into `~/vcpkg`
 if it is missing. `BUILD_DIR=/some/other/dir ./build.sh` builds outside the source tree.
 
+## Android
+
+Calligrus also runs on Android (a spike: see spec section 35). The app is the same C++ as the desktop app, loaded by
+GameActivity; its Java side is in `android/` (a Gradle project). Needs a Linux machine (or WSL) with:
+
+- the Android SDK (platform 36, build-tools 35 or 36, CMake 3.22.1) and NDK 27.2.12479018 (`ANDROID_HOME`; the NDK is
+  found as `$ANDROID_HOME/ndk/27.2.12479018`), JDK 17 for Gradle, and `ANDROID_NDK_HOME` set to that NDK (vcpkg builds
+  the libraries with it);
+- vcpkg (as for Linux). The libraries are built for the triplets `arm64-android` and `x64-android` (our overlays
+  in `cmake/triplets`: API 26, release libraries only), chain-loading the NDK toolchain; Gradle's CMake passes all that.
+
+```sh
+export ANDROID_HOME=~/Android/Sdk ANDROID_NDK_HOME=~/Android/Sdk/ndk/27.2.12479018
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+cd android
+sh gradlew assembleDebug                          # app/build/outputs/apk/debug/app-debug.apk (arm64-v8a + x86_64)
+sh gradlew assembleDebug -PcalligrusAbis=x86_64   # one CPU only (faster); -PvcpkgRoot=/path/to/vcpkg if not in ~/vcpkg
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+The first build compiles the libraries (a few minutes per CPU); vcpkg's binary cache makes later ones quick. Do not run
+two vcpkg builds at once (a desktop build and the Android one share the vcpkg folder). Run in the emulator
+headless with `emulator -avd NAME -no-window -no-audio -gpu swiftshader_indirect` (KVM makes it usable).
+
+### Android release build
+
+`assembleRelease` needs no credentials and gives an unsigned, optimised APK (native Release, symbols stripped, R8 on;
+arm64-v8a only unless `-PcalligrusAbis=arm64-v8a,x86_64`). `versionName` is read from `project(calligrus VERSION ...)`
+in `CMakeLists.txt`; `versionCode` is in `android/app/build.gradle.kts`.
+
+```sh
+cd android
+sh gradlew assembleRelease     # app/build/outputs/apk/release/app-release-unsigned.apk
+```
+
+An unsigned APK does not install. Sign it on the machine that holds your keystore (Windows, PowerShell; needs the
+Android SDK build-tools, found through `ANDROID_HOME` / `ANDROID_SDK_ROOT` / `C:\tools\android-sdk`):
+
+```powershell
+.\android\sign-release.ps1 -Apk calligrus-0.1.0-unsigned.apk
+# -Out (default: <name>-signed.apk), -Keystore (default %USERPROFILE%\.kaoss\kaoss-release.jks), -Alias (default calligrus)
+```
+
+The script runs `zipalign` and `apksigner`; apksigner asks for the password itself and the script then prints the
+certificate. Keep the keystore out of the repository.
+
+For CI, Gradle signs the release itself when all of these environment variables are set (nothing is read from files in
+the tree): `CALLIGRUS_RELEASE_KEYSTORE` (path), `CALLIGRUS_RELEASE_STORE_PASSWORD`, optionally
+`CALLIGRUS_RELEASE_KEY_ALIAS` (default `calligrus`) and `CALLIGRUS_RELEASE_KEY_PASSWORD` (default: the store password).
+Otherwise the APK stays unsigned.
+
 ## Tests
 
 Every `calligrus-*-test` executable in the build folder is a console test with exit code 0 on success (no window).

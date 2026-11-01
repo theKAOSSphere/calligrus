@@ -1,0 +1,29 @@
+# Spec 7: find opened with `/` (vim style). Enter runs the search and gives the keys back to the document (query and
+# highlights stay), n / N step, Esc clears and closes, `/` again brings the last query back selected. (find.mdscript
+# covers Ctrl+F, where Enter = next and the field keeps focus.)
+size 900 700
+open find.md
+keys /
+type fox
+expect-find field 8 1
+shot typed.png
+keys enter
+expect-find doc 8 1
+shot entered.png
+keys n
+expect-find doc 8 2
+shot next.png
+keys n n
+expect-find doc 8 4
+keys N
+expect-find doc 8 3
+keys esc
+expect-find closed
+shot closed.png
+keys /
+expect-find field 8 1
+type dog
+expect-find field 1 1
+shot replaced.png
+keys esc
+expect-find closed

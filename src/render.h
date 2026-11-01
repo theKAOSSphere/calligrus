@@ -26,6 +26,13 @@ struct OutlineEntry {
     float y;  // offset of the heading from the top of the document, in pixels
 };
 
+// A block that scrolls sideways (a wide code block or display formula): where it is on screen this frame, and its key
+// in RenderCache::code. The Android shell uses the list to tell a sideways finger drag on such a block from a page scroll.
+struct HBlock {
+    ImVec2 min, max;
+    const char* key = nullptr;
+};
+
 struct RenderResult {
     float height = 0;                   // total height of the drawn document
     std::vector<OutlineEntry> outline;  // headings, for the side panel
@@ -33,6 +40,7 @@ struct RenderResult {
     bool mouse_captured = false;        // a code block's Copy button / scrollbar took the mouse press
     bool over_code_control = false;     // the mouse is over such a control (normal cursor, no I-beam)
     bool animating = false;             // something changes by itself soon ("Copied" label): keep drawing
+    std::vector<HBlock> hblocks;        // the blocks drawn this frame that can scroll sideways
 };
 
 // Per-frame switches for render_document.
@@ -68,6 +76,8 @@ std::filesystem::path resolve(const std::filesystem::path& base_dir, std::string
 struct CodeScroll {
     float offset = 0;          // px scrolled to the right
     double copied_at = -1e9;   // ImGui time of the last Copy click ("Copied" for 1.5 s)
+    float overflow = 0;        // how far it can scroll (as of the last draw)
+    double scrolled_at = -1e9; // ImGui time of the last wheel / touch scroll (a formula shows its bar for a moment after)
 };
 
 // One row of a code block (a line) or a table: for the editor's Ctrl+click (spec 23).
@@ -108,6 +118,10 @@ struct RenderCache {
     float drag_grab = 0;             // mouse x minus thumb x when the drag started
     size_t code_version = SIZE_MAX;  // document version `code` belongs to
 };
+
+// A sideways scroll of the block `key` by `dx` px (+ = the content moves right, as a finger drags it; the offset shrinks),
+// clamped to its range. `hit_end` is set when a limit stopped it. False if the block is not (or no longer) there.
+bool render_scroll_h(RenderCache& cache, const char* key, float dx, bool* hit_end = nullptr);
 
 // Draw `doc` with its top-left corner at `origin` (screen coords), wrapping to
 // `width`. Only blocks overlapping [view_top, view_bottom] (screen y) are drawn

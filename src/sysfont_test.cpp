@@ -1,7 +1,12 @@
 // calligrus-sysfont-test: system fonts for missing characters (spec 30). Console only, no window.
 // Exit code 0 = all passed.
+#include <chrono>
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <map>
+#include <thread>
 #include <string>
 #include <vector>
 
@@ -115,6 +120,71 @@ int main() {
         const std::set<char32_t> chars = {U'a', 0x0A97, U' ', U'\n', 0x0A97, U'b'};
         check(sysfont::missing_chars(chars, has) == std::vector<char32_t>({0x0A97}), "missing_chars");
         check(!sysfont::cmap_has("junk", U'a'), "junk has nothing");
+        // The ranges of a cmap (what the saved index keeps) say the same as asking the cmap code by code.
+        for (size_t i = 0; i < cmaps.size(); i++) {
+            FaceCoverage cov;
+            cov.ranges = cmap_ranges(cmaps[i]);
+            size_t differ = 0;
+            for (char32_t c = 0; c < 0x3200; c++) differ += cov.has(c) != sysfont::cmap_has(cmaps[i], c);
+            for (char32_t c : {char32_t(0x1F600), char32_t(0x1D400), char32_t(0x10FFFF)}) differ += cov.has(c) != sysfont::cmap_has(cmaps[i], c);
+            check(differ == 0 && !cov.ranges.empty(), "cmap_ranges agrees with cmap_has for bundled font " + std::to_string(i) + " (" + std::to_string(cov.ranges.size()) + " ranges)");
+            bool sorted = true;
+            for (size_t k = 1; k < cov.ranges.size(); k++) sorted = sorted && cov.ranges[k - 1].second + 1 < cov.ranges[k].first;
+            check(sorted, "the ranges are sorted and merged");
+        }
+        check(cmap_ranges("junk").empty(), "junk has no ranges");
+    }
+    {  // the saved font index: written once, read again for files that did not change, a changed file is read again
+        namespace fs = std::filesystem;
+        const fs::path dir = fs::temp_directory_path() / "calligrus-fontindex-test";
+        std::error_code ec;
+        fs::remove_all(dir, ec);
+        fs::create_directories(dir / "fonts", ec);
+        const auto plex = resource("fonts/IBMPlexSans-Regular.ttf");
+        check(plex.has_value(), "resource for the index test");
+        if (plex) {
+            const fs::path font = dir / "fonts" / "plex.ttf", cache = dir / "cache" / "fontindex.cache";
+            { std::ofstream(font, std::ios::binary).write(plex->data(), std::streamsize(plex->size())); }
+            auto run = [&] {
+                FontIndex index;
+                index.start({}, {dir / "fonts"}, cache);
+                check(index.wait(10.0), "the index becomes ready");
+                return index;
+            };
+            auto wait_for_cache = [&](bool want) {  // (written by the scanning thread after it is ready)
+                for (int i = 0; i < 400 && fs::exists(cache) != want; i++) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            };
+            FontIndex first = run();
+            check(first.faces().size() == 1 && first.faces()[0].family == "IBM Plex Sans", "first scan: one face, IBM Plex Sans");
+            const FaceCoverage* cov = first.faces().empty() ? nullptr : first.coverage(first.faces()[0]);
+            check(cov && cov->has(U'a') && !cov->has(0x0A97) && !cov->colour, "first scan: coverage has a, not U+0A97");
+            wait_for_cache(true);
+            check(fs::exists(cache), "the index is saved");
+            // Make the saved name different: a second scan that reuses the file (same size and time) shows it.
+            std::string text;
+            { std::ifstream in(cache, std::ios::binary); text.assign(std::istreambuf_iterator<char>(in), {}); }
+            const size_t at = text.find("IBM Plex Sans");
+            check(at != std::string::npos, "the saved index holds the family name");
+            if (at != std::string::npos) {
+                text.replace(at, 13, "Saved Plex Sn");
+                { std::ofstream out(cache, std::ios::binary | std::ios::trunc); out << text; }
+                FontIndex second = run();
+                check(second.faces().size() == 1 && second.faces()[0].family == "Saved Plex Sn", "second scan: the unchanged file comes from the saved index");
+                const FaceCoverage* cov2 = second.faces().empty() ? nullptr : second.coverage(second.faces()[0]);
+                check(cov2 && cov2->has(U'a') && cov2->ranges == cov->ranges, "second scan: the saved coverage is the same");
+                // A changed file (other size) is read again.
+                { std::ofstream(font, std::ios::binary | std::ios::app).write("\0", 1); }
+                FontIndex third = run();
+                check(third.faces().size() == 1 && third.faces()[0].family == "IBM Plex Sans", "a changed file is read again");
+                // A damaged saved index is ignored.
+                std::this_thread::sleep_for(std::chrono::milliseconds(300));  // (the scan above is saving its result)
+                { std::ofstream out(cache, std::ios::binary | std::ios::trunc); out << "calligrus-fontindex 1\nF\tx\ty\n"; }
+                FontIndex fourth = run();
+                check(fourth.faces().size() == 1 && fourth.faces()[0].family == "IBM Plex Sans", "a damaged saved index is ignored");
+            }
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));  // (a scan thread may still be saving)
+        fs::remove_all(dir, ec);
     }
     {  // a document's characters: prose, code and table cells, not maths
         md::Document doc = md::parse("ab `c` $x$\n\n```\nd\n```\n\n| e |\n|---|\n| f |\n");

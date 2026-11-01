@@ -226,6 +226,18 @@ Parsed parse(const std::string& text_in) {
             c.kind = Kind::ExpectTabs;  // expect-tabs N ACTIVE (spec 34)
             if (args.size() != 2 || !nums(2) || c.a < 1 || c.b < 1 || c.b > c.a || c.a != double(int(c.a)) || c.b != double(int(c.b)))
                 return fail("usage: expect-tabs N ACTIVE (1-based, ACTIVE <= N)"), out;
+        } else if (cmd == "expect-find") {
+            c.kind = Kind::ExpectFind;  // expect-find closed | expect-find field|doc MATCHES CURRENT (spec 7)
+            const std::string st = args.empty() ? "" : lower(args[0]);
+            c.text = st;
+            if (st == "closed" && args.size() == 1) {
+            } else if ((st == "field" || st == "doc") && args.size() == 3) {
+                double* slots[] = {&c.a, &c.b};
+                for (size_t i = 0; i < 2; i++)
+                    if (!parse_number(args[i + 1], *slots[i]) || *slots[i] < 0) return fail("usage: expect-find closed | expect-find field|doc MATCHES CURRENT"), out;
+            } else {
+                return fail("usage: expect-find closed | expect-find field|doc MATCHES CURRENT"), out;
+            }
         } else if (cmd == "expect-editor") {
             c.kind = Kind::ExpectEditor;
             if (rest.empty()) return fail("`expect-editor` needs a JSON message, or `none`"), out;

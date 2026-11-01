@@ -14,6 +14,7 @@ set(TEXMATH_SOURCES
 )
 target_sources(calligrus PRIVATE ${TEXMATH_SOURCES})
 
+if(NOT ANDROID)  # (the tests are for desktop builds)
 # Corpus, fuzz and abuse checks for the C++ engine.
 # Console only, no window.
 add_executable(calligrus-texmath-test src/texmath/texmath_test.cpp ${TEXMATH_SOURCES})
@@ -26,3 +27,4 @@ add_custom_command(TARGET calligrus-texmath-test POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
             ${CMAKE_SOURCE_DIR}/assets/fonts/latinmodern-math.otf
             $<TARGET_FILE_DIR:calligrus-texmath-test>/assets/fonts/latinmodern-math.otf)
+endif()

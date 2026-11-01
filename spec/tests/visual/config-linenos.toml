@@ -6,6 +6,8 @@ show_outline = false
 vim_keys = true
 remember_window = false
 editor_marker = true
+# Installed fonts differ per machine (spec 30): the suite uses the bundled ones only.
+system_fallback = false
 
 [code]
 line_numbers = true

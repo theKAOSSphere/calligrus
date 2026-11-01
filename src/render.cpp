@@ -25,6 +25,17 @@ fs::path resolve(const fs::path& base_dir, std::string src) {
 static bool g_export = false;
 void render_set_export(bool on) { g_export = on; }
 
+bool render_scroll_h(RenderCache& cache, const char* key, float dx, bool* hit_end) {
+    const auto it = cache.code.find(key);
+    if (it == cache.code.end() || it->second.overflow <= 0) return false;
+    CodeScroll& s = it->second;
+    const float want = s.offset - dx, got = std::clamp(want, 0.0f, s.overflow);
+    if (hit_end) *hit_end = dx != 0 && got != want;
+    s.offset = got;
+    s.scrolled_at = ImGui::GetTime();
+    return true;
+}
+
 namespace {
 
 // Everything a block needs to draw itself. Passed by value into nested blocks so
@@ -273,6 +284,8 @@ float draw_code(const Ctx& c, const md::Block& b, float x, float y, float width)
     const ImVec2 m = ImGui::GetMousePos();
     const bool hovered = c.opts.interactive && c.opts.mouse_in_view && m.x >= min.x && m.x < max.x && m.y >= min.y && m.y < max.y;
     ImGuiIO& io = ImGui::GetIO();
+    state.overflow = overflow;
+    if (overflow > 0 && c.opts.interactive) c.out.hblocks.push_back({min, max, b.text.data()});
 
     // Shift + wheel (or a sideways wheel / touchpad) over the block scrolls it.
     if (hovered && overflow > 0) {
@@ -608,8 +621,35 @@ float draw_math(const Ctx& c, const md::Block& b, float x, float y, float width)
     const float size = c.fonts.body * 1.2f;
     const float pad = size * 0.35f;
     if (const MathTex* m = math_get(b.text, true, size * 1.1f)) {
+        // The formula is centred; a tag (	ag{1}) sits flush right on its baseline. If the two would touch (less than `gap`
+        // between them), a centred formula moves left to keep the gap; if even that does not fit the column, the formula and
+        // its tag are one wide line that scrolls sideways (a finger drag on Android, Shift + wheel), with the gap between them.
+        const float gap = m->tag ? size : 0.0f;
+        const float tag_w = m->tag ? m->tag->w : 0.0f;
+        const float content_w = m->w + (m->tag ? gap + tag_w : 0.0f);
+        const bool scrolls = !g_export && content_w > width;
+        CodeScroll* state = nullptr;
+        float shift = 0;  // how far the scrolled line has moved left
         float left = std::round(x + std::max(0.0f, (width - m->w) / 2.0f));
+        if (m->tag && !scrolls && left + m->w + gap > x + width - tag_w) left = std::round(x + width - tag_w - gap - m->w);
+        if (scrolls) {
+            state = &c.cache.code[b.text.data()];
+            state->overflow = content_w - width;
+            if (c.opts.interactive) c.out.hblocks.push_back({ImVec2(x, y), ImVec2(x + width, y + m->asc + m->desc + 2 * pad), b.text.data()});
+            const ImVec2 mp = ImGui::GetMousePos();
+            const ImGuiIO& io = ImGui::GetIO();
+            const bool over = c.opts.interactive && c.opts.mouse_in_view && mp.x >= x && mp.x < x + width && mp.y >= y && mp.y < y + m->asc + m->desc + 2 * pad;
+            if (over) {  // Shift + wheel, or a sideways wheel, as over a code block
+                const float wheel = io.MouseWheelH != 0 ? -io.MouseWheelH : (io.KeyShift ? io.MouseWheel : 0.0f);
+                if (wheel != 0) state->offset -= wheel * 40.0f * c.fonts.scale, state->scrolled_at = ImGui::GetTime();
+            }
+            state->offset = std::round(std::clamp(state->offset, 0.0f, state->overflow));
+            shift = state->offset;
+            left = std::round(x - shift);
+        }
         float base_y = std::round(y + pad + m->asc);
+        const float block_h = m->asc + m->desc + 2 * pad;
+        if (scrolls) c.dl->PushClipRect(ImVec2(x, y), ImVec2(x + width, y + block_h), true);
         if (c.sel) {  // selectable as a whole: copies the TeX source
             c.sel->begin_group(Sep::Para);
             c.sel->new_line();
@@ -623,10 +663,26 @@ float draw_math(const Ctx& c, const md::Block& b, float x, float y, float width)
         ImVec2 p0(std::round(left - m->ox), std::round(base_y - m->oy));
         math_draw(c.dl, *m, p0, c.color);
         if (const MathTex* t = m->tag) {  // 	ag{..}: flush right on the formula's baseline (like render.rs)
-            ImVec2 q(std::round(x + width - t->w - t->ox), std::round(base_y - t->oy));
+            const float tx = scrolls ? left + m->w + gap : x + width - t->w;
+            ImVec2 q(std::round(tx - t->ox), std::round(base_y - t->oy));
             math_draw(c.dl, *t, q, c.color);
         }
-        return y + m->asc + m->desc + 2 * pad;
+        if (scrolls) {
+            c.dl->PopClipRect();
+            // A thin bar (as under a code block) while the formula has just been scrolled.
+            const double age = ImGui::GetTime() - state->scrolled_at;
+            if (age < 1.2) {
+                const float track_l = x + pad, track_w = width - 2 * pad;
+                const float thumb_w = std::max(c.pt(20), track_w * width / content_w);
+                const float thumb_x = std::round(track_l + (track_w - thumb_w) * (state->offset / state->overflow));
+                const float bar_bottom = y + block_h - c.pt(2);
+                int alpha = age < 0.8 ? 153 : int(153 * (1.2 - age) / 0.4);
+                ImU32 col = (c.theme.ui.text & ~IM_COL32_A_MASK) | (ImU32(alpha) << IM_COL32_A_SHIFT);
+                c.dl->AddRectFilled(ImVec2(thumb_x, bar_bottom - c.pt(4)), ImVec2(thumb_x + thumb_w, bar_bottom), col, c.pt(2));
+                c.out.animating = true;
+            }
+        }
+        return y + block_h;
     }
     Base base{.size = c.fonts.body, .color = c.theme.code_fg};
     return y + draw_spans(c, {md::Span{.text = "$$" + b.text + "$$", .code = true}}, base, x, y, width);

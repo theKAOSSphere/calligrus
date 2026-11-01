@@ -90,14 +90,16 @@ With vim keys on, in normal reading mode:
 
 ## Code
 
-```rust
-fn main() {
-    let name = "calligrus";
-    println!("Hello from {name}!");
+```cpp
+#include <print>
+#include <string_view>
+
+auto has_text(std::string_view text) -> bool {
+    return text.find_first_not_of(" \t\n") != std::string_view::npos;
 }
 
-fn has_text(text: &str) -> bool {
-    text.trim().len() != 0
+int main() {
+    std::println("Hello from {}!", "Calligrus");
 }
 ```
 

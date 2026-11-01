@@ -90,10 +90,12 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${GRAMMARS_DIR}/l
 target_sources(calligrus PRIVATE src/highlight.cpp ${HIGHLIGHT_EMBEDDED})
 target_link_libraries(calligrus PRIVATE calligrus-treesitter)
 
+if(NOT ANDROID)  # (the tests are for desktop builds)
 # Highlighting tests against the golden files in grammars/tests (console, no window).
 add_executable(calligrus-highlight-test src/highlight_test.cpp src/highlight.cpp src/syntax_entries.cpp ${HIGHLIGHT_EMBEDDED})
 target_link_libraries(calligrus-highlight-test PRIVATE calligrus-treesitter)
 target_compile_definitions(calligrus-highlight-test PRIVATE CALLIGRUS_GRAMMARS_DIR="${GRAMMARS_DIR}")
 if(MSVC)
     target_compile_options(calligrus-highlight-test PRIVATE /utf-8 /W4 /permissive-)
+endif()
 endif()

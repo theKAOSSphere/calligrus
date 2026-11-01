@@ -2,6 +2,8 @@
 #pragma once
 
 #include <charconv>
+
+#include "../charconv_compat.h"
 #include <string>
 
 namespace mermaid {
@@ -43,7 +45,7 @@ inline std::string fmt_shortest(float v) {
     }
     if (carry) up.insert(up[0] == '-' ? 1 : 0, "1");
     float back = 0.0f;
-    auto fr = std::from_chars(up.data(), up.data() + up.size(), back);
+    auto fr = compat::from_chars_fp(up.data(), up.data() + up.size(), back);
     if (fr.ec != std::errc() || back != v) return s;  // the upper candidate must round-trip
     return up;
 }

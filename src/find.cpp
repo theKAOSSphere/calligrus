@@ -80,47 +80,65 @@ std::vector<std::pair<size_t, size_t>> find_in_text(std::u32string_view hay, std
     return out;
 }
 
-std::vector<TextRange> find_matches(const std::vector<Run>& runs, std::string_view query, int case_mode) {
-    std::vector<TextRange> out;
-    const std::u32string needle = to_utf32(query);
-    if (needle.empty()) return out;
-    const bool case_sensitive = case_mode < 0 ? find_case_sensitive(query) : case_mode != 0;
+FindIndex build_find_index(const std::vector<Run>& runs) {
+    FindIndex out;
+    out.rows.reserve(runs.size());
+    for (const Run& r : runs) out.rows.push_back({r.pos, r.min.y, r.max.y});
 
     // One group at a time: its text, and for every character where it starts
     // and ends as a selection position.
-    std::u32string text;
-    std::vector<TextPos> starts, ends;
-    auto search_group = [&] {
-        for (auto [a, b] : find_in_text(text, needle, case_sensitive))
-            if (starts[a] < ends[b - 1]) out.push_back({starts[a], ends[b - 1]});
-        text.clear();
-        starts.clear();
-        ends.clear();
+    FindIndex::Group g;
+    auto end_group = [&] {
+        if (g.text.empty()) return;
+        g.folded.reserve(g.text.size());
+        for (char32_t c : g.text) g.folded += fold_case(c);
+        out.groups.push_back(std::move(g));
+        g = FindIndex::Group();
     };
 
     const Run* prev = nullptr;
     for (const Run& r : runs) {
-        if (prev && r.group != prev->group) search_group();
+        if (prev && r.group != prev->group) end_group();
         else if (prev && r.line != prev->line) {
             // A wrapped line: the space the wrap swallowed (or the hard
             // break) is searchable text too, as in copied text (select.cpp).
             char32_t gap = r.hard ? U'\n' : (!prev->text.empty() && prev->text.back() != ' ' && r.text != " ") ? U' ' : 0;
             if (gap) {
-                text += gap;
-                starts.push_back(TextPos{r.pos.block, r.pos.tok, 0});
-                ends.push_back(TextPos{prev->pos.block, prev->pos.tok, prev->len()});
+                g.text += gap;
+                g.starts.push_back(TextPos{r.pos.block, r.pos.tok, 0});
+                g.ends.push_back(TextPos{prev->pos.block, prev->pos.tok, prev->len()});
             }
         }
         const uint32_t n = r.len();
         const bool atomic = n != char_count(r.text);
         const std::u32string chars = atomic ? std::u32string(n, kAtomic) : to_utf32(r.text);
         for (uint32_t k = 0; k < n && k < chars.size(); k++) {
-            text += chars[k];
-            starts.push_back(TextPos{r.pos.block, r.pos.tok, k});
-            ends.push_back(TextPos{r.pos.block, r.pos.tok, k + 1});
+            g.text += chars[k];
+            g.starts.push_back(TextPos{r.pos.block, r.pos.tok, k});
+            g.ends.push_back(TextPos{r.pos.block, r.pos.tok, k + 1});
         }
         prev = &r;
     }
-    if (prev) search_group();
+    if (prev) end_group();
     return out;
+}
+
+std::vector<TextRange> find_matches(const FindIndex& index, std::string_view query, int case_mode) {
+    std::vector<TextRange> out;
+    std::u32string needle = to_utf32(query);
+    if (needle.empty()) return out;
+    const bool case_sensitive = case_mode < 0 ? find_case_sensitive(query) : case_mode != 0;
+    if (!case_sensitive)
+        for (char32_t& c : needle) c = fold_case(c);
+    for (const FindIndex::Group& g : index.groups) {
+        const std::u32string& hay = case_sensitive ? g.text : g.folded;
+        // Non-overlapping, left to right (as find_in_text).
+        for (size_t at = hay.find(needle); at != std::u32string::npos; at = hay.find(needle, at + needle.size()))
+            if (g.starts[at] < g.ends[at + needle.size() - 1]) out.push_back({g.starts[at], g.ends[at + needle.size() - 1]});
+    }
+    return out;
+}
+
+std::vector<TextRange> find_matches(const std::vector<Run>& runs, std::string_view query, int case_mode) {
+    return find_matches(build_find_index(runs), query, case_mode);
 }

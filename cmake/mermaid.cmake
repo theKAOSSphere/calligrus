@@ -60,6 +60,7 @@ else()
     set_source_files_properties(${MERMAID_SOURCES} PROPERTIES COMPILE_OPTIONS -ffp-contract=off)
 endif()
 
+if(NOT ANDROID)  # (the tests are for desktop builds)
 add_executable(calligrus-mermaid-test src/mermaid/mermaid_test.cpp ${MERMAID_SOURCES} ${CMAKE_SOURCE_DIR}/src/texmath/canvas.cpp)
 target_include_directories(calligrus-mermaid-test PRIVATE ${Stb_INCLUDE_DIR})  # stb_image: PNG icons in <image>
 target_link_libraries(calligrus-mermaid-test PRIVATE harfbuzz::harfbuzz)  # text shaping + glyph outlines
@@ -71,4 +72,5 @@ if(MSVC)
     target_compile_options(calligrus-mermaid-test PRIVATE /utf-8 /W4 /permissive-  /fp:strict)
 else()
     target_compile_options(calligrus-mermaid-test PRIVATE -Wall -Wextra -ffp-contract=off)
+endif()
 endif()

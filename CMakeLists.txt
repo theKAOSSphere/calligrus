@@ -5,6 +5,17 @@
 # The easiest way is to run .\build.ps1, which does exactly that.
 cmake_minimum_required(VERSION 3.21)
 
+# Android (Gradle's CMake, android/): the vcpkg triplet follows the ABI; our overlay triplets (cmake/triplets)
+# are vcpkg's own for API 26 and release libraries only. Must be set before project().
+if(ANDROID_ABI AND NOT VCPKG_TARGET_TRIPLET)
+    if(ANDROID_ABI STREQUAL "arm64-v8a")
+        set(VCPKG_TARGET_TRIPLET arm64-android)
+    elseif(ANDROID_ABI STREQUAL "x86_64")
+        set(VCPKG_TARGET_TRIPLET x64-android)
+    endif()
+    set(VCPKG_OVERLAY_TRIPLETS ${CMAKE_CURRENT_LIST_DIR}/cmake/triplets)
+endif()
+
 # Single-file exe: with the vcpkg triplet x64-windows-static (build.ps1's
 # default) every library is linked in statically, and so is the C/C++ runtime
 # (/MT instead of /MD), so calligrus.exe needs no DLLs next to it. Must be set
@@ -18,11 +29,16 @@ project(calligrus VERSION 0.1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Per-OS pieces: platform.cpp (Win32) or platform_linux.cpp, and the system libraries
+# Per-OS pieces: platform.cpp (Win32), platform_android.cpp (Android: the app is a shared library
+# loaded by GameActivity, see cmake/android.cmake) or platform_linux.cpp, and the system libraries
 # the small console tools need besides their own code.
 if(WIN32)
     set(CALLIGRUS_PLATFORM_SRC src/platform.cpp)
     set(CALLIGRUS_PLATFORM_LIBS shell32 comdlg32 dwmapi advapi32)
+elseif(ANDROID)
+    set(CALLIGRUS_PLATFORM_SRC src/android/platform_android.cpp)
+    set(CALLIGRUS_PLATFORM_LIBS "")
+    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-Wno-unknown-pragmas>)  # MSVC-only `#pragma warning` lines
 else()
     set(CALLIGRUS_PLATFORM_SRC src/platform_linux.cpp)
     set(CALLIGRUS_PLATFORM_LIBS "")
@@ -32,9 +48,11 @@ else()
 endif()
 
 find_package(imgui CONFIG REQUIRED)
-find_package(glfw3 CONFIG REQUIRED)
 find_package(md4c CONFIG REQUIRED)
-find_package(OpenGL REQUIRED)
+if(NOT ANDROID)  # (Android: EGL and OpenGL ES come from the NDK, the window from GameActivity)
+    find_package(glfw3 CONFIG REQUIRED)
+    find_package(OpenGL REQUIRED)
+endif()
 find_package(Stb REQUIRED)                   # stb_image (header-only): PNG / JPEG / GIF / BMP
 find_package(WebP CONFIG REQUIRED)           # libwebp: WebP
 find_package(tomlplusplus CONFIG REQUIRED)   # toml++ (header-only): reading config.toml and themes
@@ -48,7 +66,7 @@ set(CALLIGRUS_DATA_DIR ${CMAKE_SOURCE_DIR})
 # Embedded fonts, themes and demo document (library `calligrus-resources`).
 include(cmake/resources.cmake)
 
-add_executable(calligrus
+set(CALLIGRUS_SOURCES
     src/main.cpp
     src/model.cpp
     src/org.cpp
@@ -81,7 +99,14 @@ add_executable(calligrus
     src/script.cpp
     src/editor.cpp
     src/pdf.cpp
+    src/touch.cpp
 )
+if(ANDROID)
+    # The app is a shared library that GameActivity loads (the Java side: android/).
+    add_library(calligrus SHARED ${CALLIGRUS_SOURCES})
+else()
+    add_executable(calligrus ${CALLIGRUS_SOURCES})
+endif()
 if(WIN32)
     target_sources(calligrus PRIVATE src/app.rc)  # exe icon + version info
 endif()
@@ -90,10 +115,11 @@ target_link_libraries(calligrus PRIVATE WebP::webp tomlplusplus::tomlplusplus ha
 
 target_link_libraries(calligrus PRIVATE
     imgui::imgui
-    glfw
     md4c::md4c
-    OpenGL::GL
 )
+if(NOT ANDROID)
+    target_link_libraries(calligrus PRIVATE glfw OpenGL::GL)
+endif()
 if(WIN32)
     target_link_libraries(calligrus PRIVATE
         comdlg32   # GetOpenFileNameW (native "Open" dialog)
@@ -112,6 +138,9 @@ if(MSVC)
     set_target_properties(calligrus PROPERTIES WIN32_EXECUTABLE ON)
     target_link_options(calligrus PRIVATE /ENTRY:mainCRTStartup)
 endif()
+
+# The console tools and tests are for desktop builds only.
+if(NOT ANDROID)
 
 # Console tool that prints the parsed Block/Span tree (parser debugging, no window).
 add_executable(calligrus-dump src/dump.cpp src/model.cpp src/org.cpp ${CALLIGRUS_PLATFORM_SRC})
@@ -156,6 +185,12 @@ if(MSVC)
     target_compile_options(calligrus-nav-test PRIVATE /utf-8 /W4 /permissive-)
 endif()
 
+# Touch gestures (drag, tap, fling, pinch): synthetic finger events with timestamps (console, no window).
+add_executable(calligrus-touch-test src/touch_test.cpp src/touch.cpp)
+if(MSVC)
+    target_compile_options(calligrus-touch-test PRIVATE /utf-8 /W4 /permissive-)
+endif()
+
 # Link / history / state-file tests (console, no window).
 add_executable(calligrus-session-test src/session_test.cpp src/session.cpp src/userdir.cpp ${CALLIGRUS_PLATFORM_SRC})
 target_link_libraries(calligrus-session-test PRIVATE tomlplusplus::tomlplusplus ${CALLIGRUS_PLATFORM_LIBS})
@@ -191,6 +226,8 @@ if(MSVC)
     target_compile_options(calligrus-glyphdump PRIVATE /utf-8 /W4 /permissive-)
 endif()
 
+endif()  # NOT ANDROID
+
 if(NOT MSVC)
     add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-Wno-unknown-pragmas>)  # MSVC-only `#pragma warning` lines
 endif()
@@ -200,8 +237,14 @@ include(cmake/highlight.cmake)  # syntax highlighting
 include(cmake/texmath.cmake)    # TeX math engine
 include(cmake/mermaid.cmake)    # pure C++ Mermaid renderer (work in progress, opt-in)
 
+if(ANDROID)
+    include(cmake/android.cmake)  # the Android shell: window, EGL, touch, JNI
+endif()
+
 # No post-build copying: fonts, themes and the demo are inside the exe
 # (cmake/resources.cmake), so build\Release\calligrus.exe runs on its own.
+
+if(NOT ANDROID)
 
 # Page-break rules tests (console, no window):
 add_executable(calligrus-pages-test src/pages_test.cpp src/pages.cpp)
@@ -233,3 +276,5 @@ target_link_libraries(calligrus-pdf-test PRIVATE harfbuzz::harfbuzz-subset harfb
 if(MSVC)
     target_compile_options(calligrus-pdf-test PRIVATE /utf-8 /W4 /permissive-)
 endif()
+
+endif()  # NOT ANDROID

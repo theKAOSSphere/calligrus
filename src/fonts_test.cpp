@@ -8,7 +8,9 @@
 //      unknown names, index not ready yet);
 //   3. the real scanner on this machine's font folders (timed), and
 //      font_em_ratio() on a .ttc face other than the first;
-//   4. code ligatures (shaping.h) on the bundled Cascadia Code.
+//   4. code ligatures (shaping.h) on the bundled Cascadia Code;
+//   5. ImGui's FreeType loader across baked sizes that come and go (spec 27: glyphs and advances of the
+//      code font must not depend on which other sizes were loaded or discarded before).
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
@@ -17,6 +19,10 @@
 #include <sstream>
 #include <string>
 #include <vector>
+
+#include <cmath>
+
+#include <imgui.h>
 
 #include "font_index.h"
 #include "fonts.h"
@@ -287,6 +293,77 @@ static void test_shaping() {
     shaping::set_font(nullptr, {});
 }
 
+// --- 5. baked sizes ------------------------------------------------------------------------
+
+// ImGui keeps one "baked" font per size and frees the ones unused for a few frames; the FreeType loader must load
+// every glyph at ITS baked's size. The code font is monospaced, so at every size ' ', 'M', 'i', '/' and '-' have
+// one advance, and advance / size is about the same at every size. (With the loader's own "same baked as last
+// time" shortcut, a size used after others came and went got glyphs loaded at another size.)
+static void test_baked_sizes() {
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO();
+    io.IniFilename = nullptr;
+    io.DisplaySize = ImVec2(800, 600);
+    io.DeltaTime = 1.0f / 60.0f;
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;  // the atlas grows on demand, no GPU needed
+    Fonts fonts = load_fonts(FontFiles{}, false);
+    // What the app does: a frame lays text out (a few characters of the big and the real size), then, between
+    // frames, main.cpp sys_search looks up the document's characters at 16 px; later frames use more characters.
+    const float real = fonts.px(fonts.mono, 14.0f), big = real * std::floor(1200.0f / real);
+    ImGui::NewFrame();
+    for (ImFont* f : {fonts.regular, fonts.mono}) {
+        f->GetFontBaked(big)->GetCharAdvance('M');
+        f->GetFontBaked(real)->GetCharAdvance('M');
+    }
+    ImGui::EndFrame();
+    for (ImFont* f : {fonts.regular, fonts.mono})
+        for (char c = ' '; c < '~'; c++) f->GetFontBaked(16.0f)->FindGlyphNoFallback(ImWchar(c));
+    ImGui::NewFrame();
+    bool phase_ok = true;
+    for (char c : {'/', '-', 'i', 'W', ' ', 'x'}) {
+        const float adv_big = fonts.mono->GetFontBaked(big)->GetCharAdvance(ImWchar(c)) / big;
+        const float adv_real = fonts.mono->GetFontBaked(real)->GetCharAdvance(ImWchar(c)) / real;
+        if (std::fabs(adv_big / adv_real - 1.0f) > 0.06f) phase_ok = false;
+    }
+    ImGui::EndFrame();
+    check(phase_ok, "code font: advances at the big size match the real size after a 16 px lookup in between");
+    // Many sizes, in a changing order, a few per frame: ImGui's pool of bakeds grows and shrinks, as it does while
+    // the user zooms, and the layout asks for big sizes next to the real ones.
+    std::vector<float> sizes;
+    for (int i = 0; i < 24; i++) sizes.push_back(12.0f + float(i) * 2.5f);
+    for (float big : {512.0f, 600.0f, 1184.0f}) sizes.push_back(big);
+    const char probe[] = {' ', 'M', 'i', '/', '-', '.', 'W'};
+    float ratio0 = 0;
+    bool same_advance = true, same_ratio = true;
+    std::string first_bad;
+    unsigned lcg = 12345;
+    for (int frame = 0; frame < 120; frame++) {
+        ImGui::NewFrame();
+        for (int k = 0; k < 4; k++) {
+            lcg = lcg * 1664525u + 1013904223u;
+            const float size = sizes[(lcg >> 16) % sizes.size()];
+            ImFontBaked* baked = fonts.mono->GetFontBaked(size);
+            const float a0 = baked->GetCharAdvance('M');
+            for (char c : probe) {
+                if (std::fabs(baked->GetCharAdvance(ImWchar(c)) - a0) > 0.01f) {
+                    same_advance = false;
+                    if (first_bad.empty()) first_bad = "size " + std::to_string(baked->Size) + " frame " + std::to_string(frame) + " '" + c + "'";
+                }
+            }
+            const float ratio = a0 / baked->Size;
+            if (ratio0 == 0) ratio0 = ratio;
+            if (std::fabs(ratio / ratio0 - 1.0f) > 0.06f) {
+                same_ratio = false;
+                if (first_bad.empty()) first_bad = "ratio at size " + std::to_string(baked->Size) + " frame " + std::to_string(frame);
+            }
+        }
+        ImGui::EndFrame();
+    }
+    check(same_advance, "code font: one advance for every probe character at every size " + first_bad);
+    check(same_ratio, "code font: advance / size stays the same across sizes " + first_bad);
+    ImGui::DestroyContext();
+}
+
 int main() {
     const fs::path dir = CALLIGRUS_SPEC_TESTS_DIR;
     int n_files = 0, n_queries = 0;
@@ -305,6 +382,7 @@ int main() {
     test_resolve();
     test_scanner();
     test_shaping();
+    test_baked_sizes();
 
     std::printf("fontpick %d files, %d queries; %d checks passed, %d failed\n", n_files, n_queries, passed, failures);
     std::printf("%s\n", failures ? "SOME CHECKS FAILED" : "all checks passed");

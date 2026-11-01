@@ -7,19 +7,24 @@
 // system font folders (our own small sfnt reader, no FreeType). Scanning takes
 // up to about a second, so it runs on a background thread at start-up; until
 // it is done, named fonts can't be resolved yet (the app uses the built-in
-// faces and switches when the index is ready).
+// faces and switches when the index is ready). The result is saved (with each face's character coverage) in a
+// cache file next to the app's state, keyed by every font file's path, size and modification time: the next start
+// reads only the files that are new or changed (spec 30).
 //
 // The picking rules (pick_faces) are separate from the scanner so the shared
 // tests (the Rust port) can feed them a fake index.
 #pragma once
 
 #include <atomic>
+#include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "config.h"  // Config::Fonts
@@ -81,6 +86,18 @@ std::vector<FontFace> parse_font_faces(std::string_view data, const std::string&
 // the whole file. False if the file can't be read or has no cmap. (For sysfont.h, spec 30.)
 bool read_font_cmap(const std::filesystem::path& file, int face, std::string& cmap, bool& colour);
 
+// Which characters a face has: sorted, merged, inclusive ranges of code points (what its Unicode cmap subtables map
+// to a glyph), and whether it is a colour font. Kept in the index, and saved with it (spec 30), so choosing a system
+// font for missing characters needs no font file at all.
+struct FaceCoverage {
+    bool colour = false;
+    std::vector<std::pair<uint32_t, uint32_t>> ranges;
+    bool has(char32_t c) const;
+};
+
+// The code points a `cmap` table maps to a glyph (the Unicode subtables of format 4, 6, 12 and 13), as ranges.
+std::vector<std::pair<uint32_t, uint32_t>> cmap_ranges(std::string_view cmap);
+
 // A family as listed in the settings dropdown.
 struct FontFamily {
     std::string name;   // as the regular pick's file spells it
@@ -96,13 +113,21 @@ class FontIndex {
 public:
     // Scan `dirs` (default: system_font_dirs()) in the background. `on_ready`
     // is called from the scanning thread when done (e.g. to wake the UI loop).
-    void start(std::function<void()> on_ready = {}, std::vector<std::filesystem::path> dirs = {});
+    // `cache`: the file the index is saved to and read from (default, for the system's folders only:
+    // default_cache_file(); with `dirs` given and no `cache`, nothing is saved).
+    void start(std::function<void()> on_ready = {}, std::vector<std::filesystem::path> dirs = {}, std::filesystem::path cache = {});
     bool ready() const { return state_ && state_->ready.load(std::memory_order_acquire); }
     // Wait up to `seconds` for the scan to finish; returns ready().
     bool wait(double seconds) const;
 
     const std::vector<FontFace>& faces() const;      // sorted by file path, then face index
     const std::vector<FontFamily>& families() const;  // sorted by name (case-insensitive), unique
+    // The characters of a face of the index (nullptr: unknown, or not ready). Same rule as faces().
+    const FaceCoverage* coverage(const FontFace& face) const;
+
+    // Where the index is saved: <state folder>/calligrus/fontindex.cache ($XDG_STATE_HOME or ~/.local/state; on
+    // Android the app's files folder; on Windows %LOCALAPPDATA%). Empty if there is no such folder.
+    static std::filesystem::path default_cache_file();
 
     // The folders scanned on this system: %WINDIR%\Fonts and
     // %LOCALAPPDATA%\Microsoft\Windows\Fonts (per-user installs).
@@ -113,6 +138,7 @@ private:
         std::atomic<bool> ready{false};
         std::vector<FontFace> faces;
         std::vector<FontFamily> families;
+        std::map<std::pair<std::string, int>, FaceCoverage> coverage;  // by file and face number
     };
     std::shared_ptr<State> state_;  // shared with the (detached) scanning thread
 };

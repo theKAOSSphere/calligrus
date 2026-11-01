@@ -17,7 +17,7 @@ struct KeyToken {
     char32_t ch = 0;    // otherwise: this character ('G' implies shift)
 };
 
-enum class Kind { Size, Scale, Open, Keys, Type, Click, Move, Drag, Wheel, Settle, Frames, Slide, Export, ExportPages, PagesBegin, PageShot, Shot, Echo, ExpectTitle, ExpectTabs, ExpectEditor, Editor, SyncDump, Quit };
+enum class Kind { Size, Scale, Open, Keys, Type, Click, Move, Drag, Wheel, Settle, Frames, Slide, Export, ExportPages, PagesBegin, PageShot, Shot, Echo, ExpectTitle, ExpectTabs, ExpectFind, ExpectEditor, Editor, SyncDump, Quit };
 
 struct Command {
     Kind kind = Kind::Quit;
@@ -29,6 +29,8 @@ struct Command {
     bool has_pos = false;               // Wheel: X Y given
     bool mod_ctrl = false, mod_shift = false, mod_alt = false;  // Click / Move / Drag: modifier words (spec 23)
     // ExpectTabs: `a` = how many tabs must be open, `b` = which one (1-based) is active (spec 34).
+    // ExpectFind: `text` = closed | field | doc (the find bar is closed / open with the keys in its field / open with the keys on
+    // the document), `a` = matches, `b` = the current one (1-based, 0 = none) (spec 7).
     // ExpectEditor: `text` is the JSON, or empty for `expect-editor none`.
 };
 

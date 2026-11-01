@@ -105,3 +105,8 @@ bool fonts_coverage_boost();
 // A file that can't be used falls back (prose styles: the custom regular face
 // if that loaded, else the built-in one) and adds a message to `errors`.
 Fonts load_fonts(const FontFiles& files, bool dark);
+
+// Read font files into memory ahead of load_fonts, which then finds them there instead of reading them on the
+// thread that draws (spec 30). Safe to call from any thread, at any time (also while load_fonts runs elsewhere).
+// Files that cannot be read are left out: load_fonts reports them as usual.
+void prefetch_font_files(const std::vector<FontSource>& sources);

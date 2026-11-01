@@ -74,7 +74,7 @@ bool theme_picker(const char* id, std::string& value, const ThemeSet& themes, bo
         const float hw = 14.0f * scale * 0.35f, hh = 14.0f * scale * 0.225f;
         // (Open: the current window is the popup, so go through the foreground list.)
         ImDrawList* dl = open ? ImGui::GetForegroundDrawList() : ImGui::GetWindowDrawList();
-        dl->AddTriangleFilled(ImVec2(c.x - hw, c.y - hh), ImVec2(c.x + hw, c.y - hh), ImVec2(c.x, c.y + hh),
+        if (width >= 8.0f) dl->AddTriangleFilled(ImVec2(c.x - hw, c.y - hh), ImVec2(c.x + hw, c.y - hh), ImVec2(c.x, c.y + hh),
                                                           ImGui::GetColorU32(ImGuiCol_Text));
     }
     if (open) {

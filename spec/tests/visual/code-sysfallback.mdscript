@@ -1,0 +1,6 @@
+# config: config-sysfallback.toml
+# The same page as code-linenos with the system-font search on: the search looks up the document's characters at 16 px
+# between frames, which once left ImGui's FreeType loader at the wrong size (code glyphs overlapped, spec 27). Must equal code-linenos.
+size 900 700
+open code.md
+shot top.png

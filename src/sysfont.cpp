@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <filesystem>
+#include <map>
 
 namespace sysfont {
 
@@ -175,9 +176,14 @@ size_t rank(const std::string& family, const std::vector<std::string>& preferred
 }  // namespace
 
 std::vector<FontFace> ordered_candidates(const std::vector<FontFace>& faces, const std::vector<std::string>& preferred) {
+    // Each family's faces are grouped once (by lower-case name) and the regular pick made inside the group: picking
+    // from the whole list for every family would be quadratic in the number of faces (hundreds on a phone).
+    std::map<std::string, std::vector<FontFace>> groups;
+    for (const FontFace& f : faces)
+        if (!f.family.empty()) groups[lower(f.family)].push_back(f);
     std::vector<FontFace> out;
-    for (const FontFamily& family : list_families(faces))
-        if (auto regular = pick_faces(faces, family.name).regular) out.push_back(*regular);
+    for (const auto& [key, group] : groups)
+        if (auto regular = pick_faces(group, group.front().family).regular) out.push_back(*regular);
     std::stable_sort(out.begin(), out.end(), [&](const FontFace& a, const FontFace& b) {
         const size_t ra = rank(a.family, preferred), rb = rank(b.family, preferred);
         return ra != rb ? ra < rb : lower(a.family) < lower(b.family);
@@ -221,8 +227,14 @@ std::vector<FontSource> pick_with(const std::vector<FontFace>& faces, const std:
 }
 
 std::vector<FontSource> pick_system_fonts(const std::vector<FontFace>& faces, const std::vector<char32_t>& missing,
-                                          size_t max) {
-    auto coverage = [](const FontFace& face, const std::vector<char32_t>& missing, std::vector<char32_t>& covered) {
+                                          size_t max, const CoverageLookup& lookup) {
+    auto coverage = [&lookup](const FontFace& face, const std::vector<char32_t>& missing, std::vector<char32_t>& covered) {
+        if (const FaceCoverage* known = lookup ? lookup(face) : nullptr) {
+            if (known->colour) return false;
+            for (char32_t c : missing)
+                if (known->has(c)) covered.push_back(c);
+            return true;
+        }
         std::string cmap;
         bool colour = false;
         const std::u8string path(face.file.begin(), face.file.end());

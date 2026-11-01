@@ -56,8 +56,12 @@ using CoverageFn = std::function<bool(const FontFace&, const std::vector<char32_
 std::vector<FontSource> pick_with(const std::vector<FontFace>& faces, const std::vector<std::string>& preferred,
                                   const std::vector<char32_t>& missing, size_t max, const CoverageFn& coverage);
 
-// pick_with on the real font files: reads each candidate's cmap table.
+// What the index knows of a face's characters (FontIndex::coverage), or nullptr.
+using CoverageLookup = std::function<const FaceCoverage*(const FontFace&)>;
+
+// pick_with on the real fonts: a candidate's coverage comes from `lookup` (the index, which has it saved: no font
+// file is opened); a candidate it does not know is read from its file (the cmap table only).
 std::vector<FontSource> pick_system_fonts(const std::vector<FontFace>& faces, const std::vector<char32_t>& missing,
-                                          size_t max);
+                                          size_t max, const CoverageLookup& lookup = {});
 
 }  // namespace sysfont

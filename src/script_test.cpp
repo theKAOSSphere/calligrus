@@ -50,6 +50,13 @@ int main() {
     CHECK(et.commands[1].keys.size() == 4 && et.commands[1].keys[0].ctrl && et.commands[1].keys[0].named == "tab");
     CHECK(!script::parse("expect-tabs 2\n").error.empty() && !script::parse("expect-tabs 2 3\n").error.empty() && !script::parse("expect-tabs 0 0\n").error.empty());
 
+    // expect-find (spec 7)
+    auto ef = script::parse("expect-find closed\nexpect-find field 3 1\nexpect-find doc 0 0\n");
+    CHECK(ef.error.empty() && ef.commands.size() == 3 && ef.commands[0].kind == script::Kind::ExpectFind && ef.commands[0].text == "closed");
+    CHECK(ef.commands[1].text == "field" && ef.commands[1].a == 3 && ef.commands[1].b == 1 && ef.commands[2].text == "doc");
+    CHECK(!script::parse("expect-find\n").error.empty() && !script::parse("expect-find open 1 1\n").error.empty() &&
+          !script::parse("expect-find doc 1\n").error.empty() && !script::parse("expect-find closed 1 1\n").error.empty());
+
     auto sd = script::parse("sync-dump out/sync.tsv\n");
     CHECK(sd.error.empty() && sd.commands.size() == 1 && sd.commands[0].kind == script::Kind::SyncDump && sd.commands[0].text == "out/sync.tsv");
     CHECK(!script::parse("sync-dump\n").error.empty());

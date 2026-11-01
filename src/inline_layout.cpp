@@ -184,11 +184,15 @@ float text_width(ImFont* font, float size, float adv, std::string_view s) {
     return w;
 }
 
+static bool g_blank_missing = false;
+void set_blank_missing(bool on) { g_blank_missing = on; }
+
 void draw_text(ImDrawList* dl, ImFont* font, float size, float adv, ImVec2 pos, ImU32 col, std::string_view s) {
     const float y = std::round(pos.y);
     // A plain character (whitespace draws nothing). PDF export (spec 33): captured as text instead of drawn.
     auto plain = [&](ImVec2 at, unsigned int c) {
         if (c == ' ' || c == '\t') return;
+        if (g_blank_missing && !font->IsGlyphInFont(static_cast<ImWchar>(c))) return;  // (spec 30: no box while a font is being found)
         if (!text_capture::character(dl, font, size, at, col, c)) font->RenderChar(dl, size, at, col, static_cast<ImWchar>(c));
     };
     // Complex scripts (spec 32): glyphs from the shaper, each on a whole pixel like the old path.

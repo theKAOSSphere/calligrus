@@ -5,6 +5,7 @@
 #include <initializer_list>
 #include <limits>
 
+#include "../charconv_compat.h"
 #include "utf.h"
 
 namespace texmath {
@@ -56,11 +57,11 @@ std::optional<float> parse_f32(std::u32string_view s) {
     }
     if (digits == 0) return std::nullopt;
     float value = 0.0f;
-    auto res = std::from_chars(ascii.data(), ascii.data() + ascii.size(), value);
+    auto res = compat::from_chars_fp(ascii.data(), ascii.data() + ascii.size(), value);
     if (res.ec == std::errc::result_out_of_range) {
         // Rust rounds out-of-range values to infinity / zero instead of failing.
         double d = 0.0;
-        auto res2 = std::from_chars(ascii.data(), ascii.data() + ascii.size(), d);
+        auto res2 = compat::from_chars_fp(ascii.data(), ascii.data() + ascii.size(), d);
         if (res2.ec == std::errc::result_out_of_range) {
             // Too long even for a double: decide by the position of the first
             // non-zero digit relative to the decimal point.

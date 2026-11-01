@@ -6,6 +6,7 @@
 #include <regex>
 #include <tuple>
 
+#include "../charconv_compat.h"
 #include "kinds.h"
 #include "json5.h"
 #include "parser_internal.h"
@@ -720,7 +721,7 @@ std::optional<float> parse_f32_px(std::string value) {
     if (*b == '+') ++b;
     if (b == e) return std::nullopt;
     float f = 0;
-    auto res = std::from_chars(b, e, f);
+    auto res = compat::from_chars_fp(b, e, f);
     if (res.ec != std::errc() || res.ptr != e) return std::nullopt;
     return f;
 }

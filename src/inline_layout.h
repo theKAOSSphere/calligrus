@@ -114,6 +114,10 @@ float text_width(ImFont* font, float size, float adv, std::string_view s);
 // `pos` is the top-left of the line box (as for AddText).
 void draw_text(ImDrawList* dl, ImFont* font, float size, float adv, ImVec2 pos, ImU32 col, std::string_view s);
 
+// While a system font for missing characters is being looked for (spec 30), characters no font has are drawn as
+// blank space (with the width the layout gives them) instead of the missing-glyph box. Off: the box, as before.
+void set_blank_missing(bool on);
+
 // With a Collector, every painted token is reported for text selection and
 // selected parts get a highlight (drawn first, behind the text), find matches too.
 // (Colours come from the theme: find_match / find_current; highlight = selection.)

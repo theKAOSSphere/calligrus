@@ -1,0 +1,13 @@
+# Fixed configuration for the visual regression suite (spec 20).
+theme = "calligrus-light"
+zoom = 1.0
+body_size = 16
+show_outline = false
+vim_keys = true
+remember_window = false
+editor_marker = true
+# system_fallback is ON here (the other configs turn it off): the lookups it makes in the font atlas must not disturb the glyphs (spec 27).
+system_fallback = true
+
+[code]
+line_numbers = true

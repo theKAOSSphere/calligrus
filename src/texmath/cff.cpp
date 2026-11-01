@@ -10,6 +10,7 @@
 #include <cmath>
 #include <limits>
 
+#include "../charconv_compat.h"
 #include "font.h"
 
 namespace texmath {
@@ -262,7 +263,7 @@ private:
             if (!nibble(b1 & 0xF)) return std::nullopt;
         }
         double v = 0.0;
-        auto res = std::from_chars(text.data(), text.data() + text.size(), v);
+        auto res = compat::from_chars_fp(text.data(), text.data() + text.size(), v);
         if (res.ec != std::errc() || res.ptr != text.data() + text.size()) return std::nullopt;
         return v;
     }

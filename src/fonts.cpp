@@ -7,18 +7,23 @@
 #include <cstdlib>
 #include <filesystem>
 #include <memory>
+#include <mutex>
 #include <optional>
 
 #include <imgui.h>
 #include <imgui_internal.h>  // ImFontLoader / atlas rects, to post-process glyphs
 #ifdef IMGUI_ENABLE_FREETYPE
 #include <imgui_freetype.h>
+#include <ft2build.h>
+#include FT_FREETYPE_H
+#include FT_SIZES_H
 #endif
 
 #include "platform.h"
 #include "prose_shaping.h"
 #include "resources.h"
 #include "shaping.h"
+#include "trace.h"
 
 namespace fs = std::filesystem;
 
@@ -132,6 +137,13 @@ float font_desc_fraction(std::string_view data, int face) {
 
 static const ImFontLoader* g_base_loader = nullptr;  // FreeType (or stb_truetype)
 static ImFontLoader g_loader;                       // copy of it with our glyph hook
+// Dev switch: CALLIGRUS_FT_LEGACY=1 leaves the loader's own (stale) activation check alone, to see the old behaviour.
+static const bool g_ft_legacy = [] {
+    const char* v = std::getenv("CALLIGRUS_FT_LEGACY");
+    if (v && *v) return true;
+    const char* home = std::getenv("HOME");  // (Android: a file `ft_legacy` in the app home)
+    return home && fs::exists(fs::path(home) / "ft_legacy");
+}();
 static bool g_boost = false;                         // apply the curve (dark theme only, like egui)
 
 // Characters that only steer how their neighbours look (emoji variation
@@ -150,6 +162,17 @@ static bool load_glyph_with_curve(ImFontAtlas* atlas, ImFontConfig* src, ImFontB
         if (advance_x) *advance_x = 0.0f;
         return true;
     }
+#ifdef IMGUI_ENABLE_FREETYPE
+    // ImGui's FreeType loader skips activating a baked's FT_Size when that baked is "the one activated last", which
+    // it remembers by ADDRESS (BakedLastActivated). That memo goes stale (a baked is discarded, its FT_Size freed, and
+    // the pool of bakeds moves or reuses the address), and the glyph is then loaded, advance and picture, at the size
+    // of whatever FT_Size is active: code came out with wrong advances and glyphs, overlapping (spec 27). `data` begins
+    // with this baked's FT_Size for this source: make it the active one ourselves, every time (a cheap pointer swap).
+    if (data && !g_ft_legacy) {
+        const FT_Size size = *static_cast<FT_Size*>(data);
+        if (size && size->face && size->face->size != size) FT_Activate_Size(size);
+    }
+#endif
     if (!g_base_loader->FontBakedLoadGlyph(atlas, src, baked, data, codepoint, glyph, advance_x)) return false;
     if (!g_boost || glyph == nullptr || glyph->PackId < 0 || glyph->Colored) return true;
 
@@ -205,6 +228,17 @@ struct FontData {
 // path, so a file used for several faces (a .ttc, or a regular file standing
 // in for bold) is read once.
 std::map<std::string, std::unique_ptr<std::string>> g_custom_files;
+// What the previous load_fonts had: a file wanted again (the next atlas has the same system fonts, and one more)
+// is taken from here instead of being read again. Emptied when a load is done.
+std::map<std::string, std::unique_ptr<std::string>> g_previous_files;
+// Files read ahead of time by prefetch_font_files (another thread), until a load takes them.
+std::mutex g_prefetch_mutex;
+std::map<std::string, std::unique_ptr<std::string>> g_prefetched;
+
+std::unique_ptr<std::string> read_font_file(const std::string& file) {
+    auto bytes = platform::read_file(fs::path(std::u8string(file.begin(), file.end())));
+    return bytes ? std::make_unique<std::string>(std::move(*bytes)) : nullptr;
+}
 
 FontData builtin(const char* name) {
     auto bytes = resource(name);
@@ -216,10 +250,24 @@ FontData builtin(const char* name) {
 std::optional<FontData> custom(const FontSource& src, std::vector<std::string>& errors) {
     auto it = g_custom_files.find(src.file);
     if (it == g_custom_files.end()) {
-        auto bytes = platform::read_file(fs::path(std::u8string(src.file.begin(), src.file.end())));
+        std::unique_ptr<std::string> bytes;
+        const char* from = "read";
+        if (auto prev = g_previous_files.find(src.file); prev != g_previous_files.end() && prev->second) {
+            bytes = std::move(prev->second), from = "kept from the last load";
+        } else if (std::lock_guard<std::mutex> lock(g_prefetch_mutex); g_prefetched.count(src.file)) {
+            bytes = std::move(g_prefetched[src.file]), from = "prefetched";
+            g_prefetched.erase(src.file);
+        }
+        if (!bytes) {
+            trace::Stopwatch sw;
+            bytes = read_font_file(src.file);
+            trace::log("font file %s: read on the UI thread, %zu bytes, %.1f ms", src.file.c_str(), bytes ? bytes->size() : size_t(0), sw.ms());
+        } else {
+            trace::log("font file %s: %s (%zu bytes)", src.file.c_str(), from, bytes->size());
+        }
         if (!bytes) errors.push_back("Could not read font " + src.file + " (using the built-in font)");
         // (A failed read is remembered as nullptr, so it's reported once.)
-        it = g_custom_files.emplace(src.file, bytes ? std::make_unique<std::string>(std::move(*bytes)) : nullptr).first;
+        it = g_custom_files.emplace(src.file, std::move(bytes)).first;
     }
     if (!it->second) return std::nullopt;
     const float em = font_em_ratio(*it->second, src.face);
@@ -325,7 +373,8 @@ Fonts load_fonts(const FontFiles& files, bool dark) {
     // at body sizes (text looked ~6% taller than egui); the font's own hints don't.
     atlas->FontLoaderFlags = ImGuiFreeTypeLoaderFlags_LightHinting | ImGuiFreeTypeLoaderFlags_NoAutoHint;
 #endif
-    g_custom_files.clear();  // the atlas was cleared: nothing reads these any more
+    g_previous_files = std::move(g_custom_files);  // the atlas was cleared: nothing reads these any more (but the next may want them)
+    g_custom_files.clear();
 
     Fonts f;
     // Which face each slot uses (resolve_fonts already applied the spec 5 / 8a
@@ -367,6 +416,7 @@ Fonts load_fonts(const FontFiles& files, bool dark) {
     if (!f.italic) f.italic = f.regular;
     if (!f.bold_italic) f.bold_italic = f.bold;
     if (!f.mono) f.mono = f.regular;
+    g_previous_files.clear();
     // Code ligatures: shape code text with the code face (not when it fell back to the prose face).
     shaping::set_font(f.mono == f.regular ? nullptr : f.mono, mono.bytes, mono.face);
     // Complex scripts in prose (spec 32): which fonts each face is made of.
@@ -383,4 +433,20 @@ Fonts load_fonts(const FontFiles& files, bool dark) {
     f.bold_italic_df = bold_italic.df > 0 ? bold_italic.df : f.bold_df;
     f.mono_df = mono.df > 0 ? mono.df : f.mono_df;
     return f;
+}
+
+void prefetch_font_files(const std::vector<FontSource>& sources) {
+    for (const FontSource& src : sources) {
+        if (src.builtin()) continue;
+        {
+            std::lock_guard<std::mutex> lock(g_prefetch_mutex);
+            if (g_prefetched.count(src.file)) continue;
+        }
+        trace::Stopwatch sw;
+        std::unique_ptr<std::string> bytes = read_font_file(src.file);
+        if (!bytes) continue;
+        trace::log("font file %s: prefetched on a worker thread, %zu bytes, %.1f ms", src.file.c_str(), bytes->size(), sw.ms());
+        std::lock_guard<std::mutex> lock(g_prefetch_mutex);
+        g_prefetched.emplace(src.file, std::move(bytes));
+    }
 }

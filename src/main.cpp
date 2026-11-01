@@ -18,6 +18,7 @@
 #include <filesystem>
 #include <fstream>
 #include <map>
+#include <set>
 #include <memory>
 #include <mutex>
 #include <deque>
@@ -29,10 +30,23 @@
 
 #include <imgui.h>
 #include <imgui_internal.h>  // ImGuiInputTextState (the find field's selection)
-#include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
 
+#ifdef __ANDROID__
+// Android: the window layer (src/android/window_android.h) declares the part of GLFW used here.
+#include <android/log.h>
+#include "android/shell.h"
+#include "android/window_android.h"
+#ifndef APIENTRY
+#define APIENTRY
+#endif
+constexpr const char* kGlslVersion = "#version 300 es";
+#else
+#include <imgui_impl_glfw.h>
+
 #include <GLFW/glfw3.h>
+constexpr const char* kGlslVersion = "#version 330";
+#endif
 #ifdef _WIN32
 // glfw3native.h pulls in <windows.h>; NOMINMAX stops it defining min/max
 // macros that would break std::min / std::max.
@@ -52,6 +66,7 @@ static void* native_window(GLFWwindow*) { return nullptr; }
 #include "editor.h"
 #include "find.h"
 #include "font_index.h"
+#include "trace.h"
 #include "sysfont.h"
 #include "fonts.h"
 #include "highlight.h"
@@ -370,10 +385,17 @@ struct DocState {
 
     // The document view as of last frame (for zoom anchoring and find scrolling).
     float view_w = 0, view_h = 0;
+    float view_y = 0;     // the view's top edge on the screen (the pinch gesture needs it)
     float content_h = 0;  // scrollable height (explicit content size for ImGui)
     // Zoom / text size changed: keep this block (index, fraction of its height) at the top.
     // (Also how a mark is gone to, spec 28.)
     std::optional<std::pair<size_t, float>> zoom_anchor;
+    float zoom_anchor_scale = 0;  // (if not 0: wait for the layout at this scale before putting the block back)
+    float zoom_anchor_off = 0;  // ...at this many px below the top of the view (a pinch keeps the block under the fingers)
+    // A pinch in progress (Android, spec 35): the laid-out document is drawn scaled by `pinch_s` about
+    // `pinch_from`, moved to `pinch_to`; no layout happens until the fingers lift.
+    float pinch_s = 1.0f;
+    ImVec2 pinch_from{0, 0}, pinch_to{0, 0};
 
     // Marks (spec 28): each top-level block's first words (marks find their block by them), and
     // the margin's letters (label, block, fraction), worked out again when `marks_dirty`.
@@ -536,9 +558,32 @@ struct FindState {
     // one up to it (-1), instead of the first one from the top of the view.
     std::optional<std::pair<uint32_t, int>> word_from;
 
+    // How the bar was opened (spec 7). `/` (vim): Enter runs the search and gives the keys back to the document, the
+    // query and highlights stay; the search starts at the view position where `/` was pressed. Ctrl+F: browser style
+    // (Enter = next match, the field keeps focus).
+    bool vim = false;
+    float origin = 0;            // vim: the view's scroll position when `/` was pressed
+    bool repick = false;         // vim: the next Enter picks the first match from `origin` again, even for an unchanged query
+    bool select_all = false;     // select the field's text when it gets focus (`/` brings the last query back selected)
+    bool enter_search = false;   // Enter was pressed in the field: search now (no waiting for typing to stop)
+    std::string last_query;      // what Esc cleared: `/` puts it back in the field
+    // Typing is debounced (spec 7): the search runs kFindDebounce s after the last edit of the field.
+    std::string typed;           // the field's text as of the last frame (an edit shows as a difference)
+    double typed_at = -1e9;      // ImGui time of the last edit
+    double due = 0;              // > 0: a search is waiting, to run at this time
+
+    // The document's searchable text, built once per layout (not per keystroke).
+    FindIndex index;
+    bool index_ok = false;
+    size_t index_key = 0;
+
     void close() {
+        if (buf[0]) last_query = buf;
         open = false;
         buf[0] = 0;  // closing clears the query, and so the highlights
+        typed.clear();
+        due = 0;
+        repick = enter_search = false;
     }
 
     // The editor's search highlight (spec 17): all matches, no current one. The
@@ -630,6 +675,11 @@ static void apply_style(const Theme& t, float scale) {
     s.ItemSpacing = ImVec2(8, 3);
     s.ItemInnerSpacing = ImVec2(4, 3);
     s.FramePadding = ImVec2(4, 1);
+#ifdef __ANDROID__
+    s.FramePadding = ImVec2(10, 9);  // finger-sized buttons (the toolbar grows with them)
+    s.ItemSpacing = ImVec2(10, 6);
+    s.ScrollbarSize = 14;
+#endif
     // Tooltips look like egui's popup frame: 6px margin, 6px corners, thin border.
     // (The main full-window panel pushes zero padding for itself.)
     s.WindowPadding = ImVec2(6, 6);
@@ -674,8 +724,30 @@ static void apply_style(const Theme& t, float scale) {
 // Toolbar widgets (egui look-alikes)
 // ---------------------------------------------------------------------------
 
+// Developer switch: a file `font_delay_ms` in the home folder (or CALLIGRUS_FONT_DELAY_MS) holding a number makes the
+// background choice of system fonts take that long more, to see how the app looks on a slow device (spec 30).
+static int debug_font_delay_ms() {
+    int ms = 0;
+    if (const char* v = std::getenv("CALLIGRUS_FONT_DELAY_MS")) ms = std::atoi(v);
+    else if (const char* home = std::getenv("HOME")) {
+        std::ifstream in(fs::path(home) / "font_delay_ms");
+        in >> ms;
+    }
+    return std::max(ms, 0);
+}
+
+// Tooltips are for a mouse (spec 35): on Android a finger arrives as mouse input too, with the touch-screen
+// source, and a tap must not leave a tooltip behind. (GLFW's mouse is always the mouse.)
+static bool tooltips_allowed() {
+#ifdef __ANDROID__
+    return ImGui::GetIO().MouseSource == ImGuiMouseSource_Mouse;
+#else
+    return true;
+#endif
+}
+
 static void tooltip(const char* text) {
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", text);
+    if (tooltips_allowed() && ImGui::IsItemHovered()) ImGui::SetTooltip("%s", text);
 }
 
 // egui "selectable label": no background unless hovered or selected.
@@ -693,7 +765,7 @@ static bool selectable_button(const char* label, bool selected, const Theme& t) 
 // egui's `ui.separator()` inside a horizontal layout: a thin vertical line.
 static void vertical_separator() {
     // egui allocates a 6 px wide slot and draws the line 3 px into it (measured on the Rust port).
-    const float scale = ImGui::GetStyle().FramePadding.x / 4.0f;
+    const float scale = ImGui::GetStyle().ItemInnerSpacing.x / 4.0f;  // (4 px at scale 1, whatever the padding)
     ImGui::SameLine();
     ImVec2 p = ImGui::GetCursorScreenPos();
     float h = ImGui::GetFrameHeight();
@@ -723,88 +795,296 @@ struct UiState {
 
 static void draw_recent_popup(DocState& st, UiState& ui, const Theme& theme, float scale);
 
+// The toolbar's buttons, in drawing order. When the window is too narrow they move, the ones that stay
+// least long first, into the overflow menu behind the "more" button at the right end (spec 35: made for
+// phones; a desktop window gets it below kDesktopOverflowBelow px, so the usual window sizes are untouched).
+enum TbItem { kTbOpen, kTbRecent, kTbReload, kTbOutline, kTbSlides, kTbPdf, kTbSizes, kTbTheme, kTbSettings, kTbCount };
+// How long an item stays in the bar as the width shrinks (0 = last to go): Open, Outline, A- / A+, theme,
+// settings, theme, reload, recent files, then the desktop-only slides and PDF.
+static const int kTbRank[kTbCount] = {0, 6, 5, 1, 7, 8, 2, 4, 3};
+// The groups the separators divide: {Open .. PDF}, {A-, A+}, {theme, settings}.
+static int tb_group(int item) { return item <= kTbPdf ? 0 : item == kTbSizes ? 1 : 2; }
+static const float kDesktopOverflowBelow = 400.0f;
+
+static float theme_combo_width(const Config& cfg, const ThemeSet& themes, float scale) {
+    const Theme* cur = themes.find(cfg.theme);
+    const std::string preview = cfg.theme == "auto" ? std::string("Auto (system)") : cur ? cur->display_name : cfg.theme;
+    return std::max(100.0f * scale, ImGui::CalcTextSize(preview.c_str()).x + 26.0f * scale);  // (as theme_picker sizes it)
+}
+
+// `text` shortened in the middle ("JW-MWM_2…10-29.md") until `width_of` says it fits in `room`; empty when fewer than
+// 3 characters would remain (the label is then not shown at all). The ends are kept: a file name's end tells the type.
+static std::string elide_middle(const std::string& text, float room, const std::function<float(const std::string&)>& width_of) {
+    std::vector<size_t> at;  // byte offset of every character, and the end
+    for (size_t i = 0; i < text.size(); i++)
+        if ((uint8_t(text[i]) & 0xC0) != 0x80) at.push_back(i);
+    const size_t n = at.size();
+    at.push_back(text.size());
+    const char* ellipsis = "\xE2\x80\xA6";
+    // `keep` = characters kept besides the ellipsis (the front gets the extra one); the largest that fits, by bisection.
+    auto with = [&](size_t keep) {
+        const size_t head = (keep + 1) / 2, tail = keep - head;
+        return text.substr(0, at[head]) + ellipsis + text.substr(at[n - tail]);
+    };
+    if (n < 4 || width_of(with(2)) > room) return {};
+    size_t lo = 2, hi = n - 1;  // `lo` fits
+    while (lo < hi) {
+        const size_t mid = (lo + hi + 1) / 2;
+        if (width_of(with(mid)) <= room) lo = mid;
+        else hi = mid - 1;
+    }
+    return with(lo);
+}
+
+static float tb_button_w(const char* label) { return ImGui::CalcTextSize(label, nullptr, true).x + 2 * ImGui::GetStyle().FramePadding.x; }
+
 static void draw_toolbar(DocState& st, UiState& ui, ConfigFile& conf, const ThemeSet& themes, const Theme& theme,
                          const Fonts& fonts, GLFWwindow* window, float scale, double now) {
-    if (ImGui::Button("\xF0\x9F\x93\x82 Open\xE2\x80\xA6")) {  // "📂 Open…"
+    Config& cfg = conf.cfg;
+    const ImGuiStyle& style = ImGui::GetStyle();
+    const float gap = style.ItemSpacing.x;
+    const float sep_w = 2 * gap + 6.0f * (style.ItemInnerSpacing.x / 4.0f);  // vertical_separator's slot
+    const float pad_right = std::round(8.0f * scale);
+    const float right = ImGui::GetWindowWidth() - pad_right;  // (window coordinates) the toolbar's right end
+    const float more_w = tb_button_w("    ##more");
+
+    // Which buttons fit.
+    const float widths[kTbCount] = {tb_button_w("\xF0\x9F\x93\x82 Open\xE2\x80\xA6"), tb_button_w("   ##recent"), tb_button_w("\xE2\x9F\xB3"),
+                                    tb_button_w("\xE2\x98\xB0 Outline"), tb_button_w("Slides"), tb_button_w("PDF"),
+                                    tb_button_w("A\xE2\x88\x92") + gap + tb_button_w("A+"), theme_combo_width(cfg, themes, scale),
+                                    tb_button_w("\xE2\x9A\x99")};
+    bool present[kTbCount];
+    for (bool& p : present) p = true;
+#ifdef __ANDROID__  // (slides and PDF export are desktop-only for now: spec 35)
+    present[kTbSlides] = present[kTbPdf] = false;
+#endif
+    auto needed = [&](const bool* on) {
+        float w = 0;
+        int prev_group = -1, count_in_group = 0;
+        for (int i = 0; i < kTbCount; i++) {
+            if (!on[i]) continue;
+            const int g = tb_group(i);
+            if (prev_group >= 0 && g != prev_group) w += sep_w, count_in_group = 0;
+            if (count_in_group > 0) w += gap;
+            w += widths[i];
+            prev_group = g, count_in_group++;
+        }
+        return w;
+    };
+    bool shown[kTbCount];
+    for (int i = 0; i < kTbCount; i++) shown[i] = present[i];
+    const float avail = right - ImGui::GetCursorPosX();
+#ifdef __ANDROID__
+    const bool may_overflow = true;
+#else
+    const bool may_overflow = avail < kDesktopOverflowBelow;
+#endif
+    bool overflow = false;
+    if (may_overflow && needed(shown) > avail) {
+        overflow = true;
+        for (;;) {  // drop the item that stays least long, until the rest and the "more" button fit
+            int worst = -1;
+            for (int i = 0; i < kTbCount; i++)
+                if (shown[i] && (worst < 0 || kTbRank[i] > kTbRank[worst])) worst = i;
+            if (worst < 0 || needed(shown) <= avail - more_w - gap) break;
+            shown[worst] = false;
+        }
+    }
+    const float more_x = right - more_w;  // the "more" button (window coordinates)
+    const float limit = overflow ? more_x - gap : right;
+
+    bool first = true, after_sep = false;
+    int prev_group = -1;
+    auto start = [&](int item) {  // the separator between groups, and the gap to the previous item
+        const int g = tb_group(item);
+        if (!first && g != prev_group) vertical_separator(), after_sep = true;
+        if (!first && !after_sep) ImGui::SameLine();
+        first = false, after_sep = false, prev_group = g;
+    };
+    auto do_open = [&] {
         if (g_script_mode) script_log("open dialog suppressed in script mode");
         else if (auto p = platform::open_file_dialog(native_window(window))) st.open_request = *p;
+    };
+    auto smaller = [&] {
+        if (cfg.body_size > kBodySizeMin) {
+            cfg.body_size--;
+            conf.queue({{"body_size", toml_int(cfg.body_size)}}, now);
+        }
+    };
+    auto larger = [&] {
+        if (cfg.body_size < kBodySizeMax) {
+            cfg.body_size++;
+            conf.queue({{"body_size", toml_int(cfg.body_size)}}, now);
+        }
+    };
+    // The menu under the PDF button: "Slides..." or "Pages..." (each then the save dialog). Drawn right after
+    // the PDF button, or after the "more" button when PDF went into its menu.
+    auto pdf_popup = [&] {
+#ifndef __ANDROID__
+        ImGui::SetNextWindowPos(ImVec2(ImGui::GetItemRectMin().x, ImGui::GetItemRectMax().y), ImGuiCond_Appearing);
+        if (ImGui::BeginPopup("##pdfmenu")) {
+            if (ImGui::Selectable("Slides\xE2\x80\xA6")) ui.export_request = 1;
+            if (ImGui::Selectable("Pages\xE2\x80\xA6")) ui.export_request = 2;
+            ImGui::Checkbox("Use current theme", &ui.pdf_current_theme);
+            tooltip("Pages: the theme shown now instead of light_theme");
+            // Paper for Pages: two radio items side by side.
+            ImGui::RadioButton("A4", &ui.pdf_paper, 0);
+            ImGui::SameLine();
+            ImGui::RadioButton("Letter", &ui.pdf_paper, 1);
+            ImGui::EndPopup();
+        }
+#endif
+    };
+
+    if (shown[kTbOpen]) {
+        start(kTbOpen);
+        if (ImGui::Button("\xF0\x9F\x93\x82 Open\xE2\x80\xA6")) do_open();  // "📂 Open…"
+        tooltip("Ctrl+O");
     }
-    tooltip("Ctrl+O");
-    ImGui::SameLine();  // the usual 8 px gap, like egui's horizontal layout
-    // The UI fonts have no ▾ glyph: paint the arrow on a blank button (the
-    // same small triangle as the Rust port).
-    if (ImGui::Button("   ##recent")) ui.open_recent = true;
-    {
-        const ImVec2 a = ImGui::GetItemRectMin(), b = ImGui::GetItemRectMax();
-        const ImVec2 c((a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f);
-        const float r = 3.5f * scale;
-        ImGui::GetWindowDrawList()->AddTriangleFilled(ImVec2(c.x - r, c.y - r * 0.5f), ImVec2(c.x + r, c.y - r * 0.5f),
-                                                      ImVec2(c.x, c.y + r * 0.6f), ImGui::GetColorU32(ImGuiCol_Text));
+    if (shown[kTbRecent]) {
+        start(kTbRecent);
+        // The UI fonts have no ▾ glyph: paint the arrow on a blank button (the
+        // same small triangle as the Rust port).
+        if (ImGui::Button("   ##recent")) ui.open_recent = true;
+        {
+            const ImVec2 a = ImGui::GetItemRectMin(), b = ImGui::GetItemRectMax();
+            const ImVec2 c((a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f);
+            const float r = 3.5f * scale;
+            ImGui::GetWindowDrawList()->AddTriangleFilled(ImVec2(c.x - r, c.y - r * 0.5f), ImVec2(c.x + r, c.y - r * 0.5f),
+                                                          ImVec2(c.x, c.y + r * 0.6f), ImGui::GetColorU32(ImGuiCol_Text));
+        }
+        tooltip("Recent files (Ctrl+Shift+O)");
+        draw_recent_popup(st, ui, theme, scale);
     }
-    tooltip("Recent files (Ctrl+Shift+O)");
-    draw_recent_popup(st, ui, theme, scale);
-    ImGui::SameLine();
-    if (ImGui::Button("\xE2\x9F\xB3")) st.reload();  // "⟳"
-    tooltip("Reload (R / Ctrl+R)");
-    ImGui::SameLine();
-    if (selectable_button("\xE2\x98\xB0 Outline", ui.show_outline, theme)) ui.show_outline = !ui.show_outline;  // "☰"
-    tooltip("Ctrl+B");
-    ImGui::SameLine();
-    if (ImGui::Button("Slides")) ui.slides_request = true;
-    tooltip("Presentation (F5)");
-    ImGui::SameLine();
-    ImGui::BeginDisabled(!ui.can_export);
-    if (ImGui::Button("PDF")) ImGui::OpenPopup("##pdfmenu");
-    ImGui::EndDisabled();
-    tooltip("Export the slides or the pages as a PDF (e in slides mode: slides)");
-    // The menu under the button: "Slides..." or "Pages..." (each then the save dialog).
-    ImGui::SetNextWindowPos(ImVec2(ImGui::GetItemRectMin().x, ImGui::GetItemRectMax().y), ImGuiCond_Appearing);
-    if (ImGui::BeginPopup("##pdfmenu")) {
-        if (ImGui::Selectable("Slides\xE2\x80\xA6")) ui.export_request = 1;
-        if (ImGui::Selectable("Pages\xE2\x80\xA6")) ui.export_request = 2;
-        ImGui::Checkbox("Use current theme", &ui.pdf_current_theme);
-        tooltip("Pages: the theme shown now instead of light_theme");
-        // Paper for Pages: two radio items side by side.
-        ImGui::RadioButton("A4", &ui.pdf_paper, 0);
+    if (shown[kTbReload]) {
+        start(kTbReload);
+        if (ImGui::Button("\xE2\x9F\xB3")) st.reload();  // "⟳"
+        tooltip("Reload (R / Ctrl+R)");
+    }
+    if (shown[kTbOutline]) {
+        start(kTbOutline);
+        if (selectable_button("\xE2\x98\xB0 Outline", ui.show_outline, theme)) ui.show_outline = !ui.show_outline;  // "☰"
+        tooltip("Ctrl+B");
+    }
+#ifndef __ANDROID__
+    if (shown[kTbSlides]) {
+        start(kTbSlides);
+        if (ImGui::Button("Slides")) ui.slides_request = true;
+        tooltip("Presentation (F5)");
+    }
+    if (shown[kTbPdf]) {
+        start(kTbPdf);
+        ImGui::BeginDisabled(!ui.can_export);
+        if (ImGui::Button("PDF")) ImGui::OpenPopup("##pdfmenu");
+        ImGui::EndDisabled();
+        tooltip("Export the slides or the pages as a PDF (e in slides mode: slides)");
+        pdf_popup();
+    }
+#endif
+    if (shown[kTbSizes]) {
+        start(kTbSizes);
+        if (ImGui::Button("A\xE2\x88\x92")) smaller();  // "A−"
+        tooltip("Smaller text");
         ImGui::SameLine();
-        ImGui::RadioButton("Letter", &ui.pdf_paper, 1);
-        ImGui::EndPopup();
+        if (ImGui::Button("A+")) larger();
+        tooltip("Larger text");
+    }
+    if (shown[kTbTheme]) {
+        start(kTbTheme);
+        conf.queue(theme_combo("##theme", cfg, themes, 0, scale, &ui.theme_picker), now);
+        tooltip("Theme");
+    }
+    if (shown[kTbSettings]) {
+        start(kTbSettings);
+        if (ImGui::Button("\xE2\x9A\x99")) ui.settings_open = !ui.settings_open;  // a plain button in the Rust port too (no "on" look)  // "⚙"
+        tooltip("Settings");
     }
 
-    vertical_separator();
-    Config& cfg = conf.cfg;
-    if (ImGui::Button("A\xE2\x88\x92") && cfg.body_size > kBodySizeMin) {  // "A−"
-        cfg.body_size--;
-        conf.queue({{"body_size", toml_int(cfg.body_size)}}, now);
-    }
-    tooltip("Smaller text");
-    ImGui::SameLine();
-    if (ImGui::Button("A+") && cfg.body_size < kBodySizeMax) {
-        cfg.body_size++;
-        conf.queue({{"body_size", toml_int(cfg.body_size)}}, now);
-    }
-    tooltip("Larger text");
-
-    vertical_separator();
-    conf.queue(theme_combo("##theme", cfg, themes, 0, scale, &ui.theme_picker), now);
-    tooltip("Theme");
-    ImGui::SameLine();
-    if (ImGui::Button("\xE2\x9A\x99")) ui.settings_open = !ui.settings_open;  // a plain button in the Rust port too (no "on" look)  // "⚙"
-    tooltip("Settings");
-
-    vertical_separator();
-    std::string label = st.path.empty() ? "built-in demo \xE2\x80\x94 open a file with Ctrl+O or drop one here" : display_path(st.path);
+    // The file name, with whatever room is left (all of it on a window wide enough). With the "more" button (a phone) the
+    // bar has no name: it is the first line of the menu instead (spec 35).
+    std::string label = st.path.empty() ? "built-in demo â open a file with Ctrl+O or drop one here" : display_path(st.path);
+#ifdef __ANDROID__  // (the app's own copy of the document sits in a long private path: show the name)
+    label = st.path.empty() ? "built-in demo" : to_utf8(st.path.filename());
+#endif
     if (st.live) label = (st.live_path.empty() ? st.live_id : display_path(st.live_path)) + (st.live_open ? " (live)" : "");
     // The path can be long, so draw it with the exact advances of the document font (like egui),
     // not ImGui's whole-pixel ones that make it ~3 % narrower.
-    {
-        const float em = 13.0f * scale;
-        const float size = fonts.px(fonts.regular, em), adv = fonts.advance_scale(fonts.regular, em);
-        const ImVec2 at = ImGui::GetCursorScreenPos();
-        const float w = text_width(fonts.regular, size, adv, label);
-        draw_text(ImGui::GetWindowDrawList(), fonts.regular, size, adv, ImVec2(at.x, at.y + ImGui::GetStyle().FramePadding.y), ImGui::GetColorU32(ImGuiCol_TextDisabled), label);
-        ImGui::Dummy(ImVec2(w, ImGui::GetFrameHeight()));
+    const float em = 13.0f * scale;
+    const float size = fonts.px(fonts.regular, em), adv = fonts.advance_scale(fonts.regular, em);
+    auto label_width = [&](const std::string& s) { return text_width(fonts.regular, size, adv, s); };
+    if (!overflow) {
+        const float w = label_width(label);
+        // The name gets the room left before the right edge and is shortened in the middle with an ellipsis when it does not
+        // fit; with room for fewer than 3 characters it is left out (spec 35).
+        const float room = limit - ((ImGui::GetItemRectMax().x - ImGui::GetWindowPos().x) + sep_w);  // (the cursor is back at the line start after the last item)
+#ifdef __ANDROID__
+        const bool fit_label = true;
+#else
+        const bool fit_label = false;  // (a desktop window keeps drawing the whole name: the window edge cuts it, as the references show)
+#endif
+        const std::string shown_label = !fit_label || w <= room ? label : elide_middle(label, room, label_width);
+        if (!shown_label.empty()) {
+            vertical_separator();
+            const ImVec2 at = ImGui::GetCursorScreenPos();
+            draw_text(ImGui::GetWindowDrawList(), fonts.regular, size, adv, ImVec2(at.x, at.y + ImGui::GetStyle().FramePadding.y), ImGui::GetColorU32(ImGuiCol_TextDisabled), shown_label);
+            ImGui::Dummy(ImVec2(std::min(w, room), ImGui::GetFrameHeight()));
+        }
     }
+
+    if (!overflow) return;
+
+    // The "more" button and its menu.
+    // The theme list opens from the menu (or `t`) while its button is hidden: a combo one pixel wide at the "more"
+    // button holds it (no arrow is drawn at that width; the button is drawn over it, and the list is its popup).
+    if (!shown[kTbTheme] && (ui.theme_picker.open_request || ui.theme_picker.active)) {
+        ImGui::SameLine(more_x);
+        conf.queue(theme_combo("##theme", cfg, themes, 1.0f, scale, &ui.theme_picker), now);
+    }
+    ImGui::SameLine(more_x);
+    if (ImGui::Button("    ##more")) ImGui::OpenPopup("##overflow");
+    const ImVec2 mb_min = ImGui::GetItemRectMin(), mb_max = ImGui::GetItemRectMax();
+    {
+        const ImVec2 c((mb_min.x + mb_max.x) * 0.5f, (mb_min.y + mb_max.y) * 0.5f);
+        const float r = 1.6f * scale, step = 5.0f * scale;
+        for (int k = -1; k <= 1; k++) ImGui::GetWindowDrawList()->AddCircleFilled(ImVec2(c.x, c.y + step * float(k)), r, ImGui::GetColorU32(ImGuiCol_Text));
+    }
+    tooltip("More");
+    if (!shown[kTbRecent]) draw_recent_popup(st, ui, theme, scale);  // (opens under this button when picked from the menu)
+    bool open_pdf = false;
+    ImGui::SetNextWindowPos(ImVec2(mb_max.x, mb_max.y), ImGuiCond_Appearing, ImVec2(1.0f, 0.0f));
+    if (ImGui::BeginPopup("##overflow")) {
+        const ImVec2 row(0, ImGui::GetFrameHeight());
+        {  // the document's name, greyed (not an item), shortened in the middle when long
+            const float room = 260.0f * scale;
+            const std::string name = label_width(label) <= room ? label : elide_middle(label, room, label_width);
+            ImGui::BeginDisabled();
+            ImGui::Selectable((name + "##name").c_str(), false, ImGuiSelectableFlags_NoAutoClosePopups, row);
+            ImGui::EndDisabled();
+            ImGui::Separator();
+        }
+        auto item = [&](int id, const char* label, bool selected = false) {
+            return !shown[id] && present[id] && ImGui::Selectable(label, selected, 0, row);
+        };
+        if (item(kTbOpen, "Open\xE2\x80\xA6")) do_open();
+        if (item(kTbOutline, "Outline", ui.show_outline)) ui.show_outline = !ui.show_outline;
+        if (!shown[kTbSizes]) {  // (these stay open, so a few taps make a bigger change)
+            if (ImGui::Selectable("Smaller text", false, ImGuiSelectableFlags_NoAutoClosePopups, row)) smaller();
+            if (ImGui::Selectable("Larger text", false, ImGuiSelectableFlags_NoAutoClosePopups, row)) larger();
+        }
+        if (item(kTbTheme, "Theme\xE2\x80\xA6")) ui.theme_picker.open_request = true;
+        if (item(kTbReload, "Reload")) st.reload();
+        if (item(kTbRecent, "Recent files\xE2\x80\xA6")) ui.open_recent = true;
+        if (item(kTbSettings, "Settings", ui.settings_open)) ui.settings_open = !ui.settings_open;
+        if (item(kTbSlides, "Slides")) ui.slides_request = true;
+        if (!shown[kTbPdf] && present[kTbPdf]) {
+            ImGui::BeginDisabled(!ui.can_export);
+            if (ImGui::Selectable("PDF\xE2\x80\xA6", false, 0, row)) open_pdf = true;
+            ImGui::EndDisabled();
+        }
+        ImGui::EndPopup();
+    }
+    if (open_pdf) ImGui::OpenPopup("##pdfmenu");
+    if (!shown[kTbPdf] && present[kTbPdf]) pdf_popup();
 }
 
 // The find bar (spec 7), a row under the toolbar.
@@ -817,16 +1097,26 @@ static void draw_find_bar(FindState& find, const Theme& theme, float pad_x, floa
     ImGui::SetNextItemWidth(240 * scale);
     // egui's TextEdit: 2 px of vertical margin (21 px tall in all) and a 1 px outline, in the accent colour while focused.
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4 * scale, 2 * scale));
-    const bool entered = ImGui::InputTextWithHint("##find", "Find in page", find.buf, sizeof(find.buf), ImGuiInputTextFlags_EnterReturnsTrue);
+    const ImGuiInputTextFlags flags = ImGuiInputTextFlags_EnterReturnsTrue | (find.select_all ? ImGuiInputTextFlags_AutoSelectAll : 0);
+    const bool entered = ImGui::InputTextWithHint("##find", "Find in page", find.buf, sizeof(find.buf), flags);
+    find.select_all = false;
     ImGui::PopStyleVar();
+    if (find.typed != find.buf) find.typed = find.buf, find.typed_at = ImGui::GetTime();  // an edit: the search waits for the typing to stop
     ImGui::GetWindowDrawList()->AddRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
                                         ImGui::IsItemActive() ? theme.ui.selection_text : theme.ui.border, 2.0f * scale);
-    if (entered) {
+    if (entered && find.vim) {
+        // Opened with `/`: Enter runs the search (now, whatever the typing wait) and the keys go back to the document.
+        find.enter_search = true;
+        ImGui::ClearActiveID();
+        ImGui::GetCurrentContext()->InputTextReactivateId = 0;  // (ConfigInputTextEnterKeepActive would take the field back next frame)
+    } else if (entered) {
         // ConfigInputTextEnterKeepActive selects the whole text after Enter; egui leaves the cursor at the end.
         if (ImGuiInputTextState* ts = ImGui::GetInputTextState(ImGui::GetItemID())) ts->ClearSelection();
-        // Enter = next match, Shift+Enter = previous (the field keeps focus).
+        // Enter = next match, Shift+Enter = previous (the field keeps focus). Typing still waiting to be searched: search it
+        // first (it then starts at the first match from the view).
         const int n = int(find.matches.size());
-        if (n > 0) {
+        if (find.due > 0) find.enter_search = true;
+        else if (n > 0) {
             find.current = (find.current + (ImGui::GetIO().KeyShift ? n - 1 : 1)) % n;
             find.scroll_to_current = true;
         }
@@ -834,6 +1124,7 @@ static void draw_find_bar(FindState& find, const Theme& theme, float pad_x, floa
     ImGui::SameLine();
     ImGui::AlignTextToFramePadding();
     if (find.buf[0] == 0) ImGui::TextDisabled(" ");
+    else if (find.due > 0) ImGui::TextDisabled("\xE2\x80\xA6");  // "…" (the search waits for the typing to stop)
     else if (find.matches.empty()) ImGui::TextDisabled("no matches");
     else ImGui::TextDisabled("%d/%d", find.current + 1, int(find.matches.size()));
     ImGui::SameLine();
@@ -958,7 +1249,7 @@ static TabBarResult draw_tab_bar(const std::vector<TabLabel>& tabs, size_t activ
             draw_label(cross_label, ImVec2(ca.x + 2.0f * scale, y + style.FramePadding.y),
                        on_cross ? theme.ui.text : (is_active ? theme.ui.selection_text : theme.weak));
         }
-        if (hovered && !tabs[i].tip.empty()) ImGui::SetTooltip("%s", tabs[i].tip.c_str());
+        if (hovered && tooltips_allowed() && !tabs[i].tip.empty()) ImGui::SetTooltip("%s", tabs[i].tip.c_str());
         if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) (on_cross ? res.close : res.switch_to) = int(i);
         if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Middle)) res.close = int(i);
         ImGui::PopID();
@@ -1186,28 +1477,82 @@ static std::vector<Run> layout_all(DocState& st, const Fonts& fonts, const Theme
     return std::move(col.runs);
 }
 
+// How long after the last keystroke in the find field the search runs (spec 7).
+constexpr double kFindDebounce = 0.15;
+
+// A developer switch for measuring: a file `find_legacy` in the home folder (or CALLIGRUS_FIND_LEGACY) makes every
+// search lay the document out and prepare its text again, as the first version did.
+static bool find_legacy() {
+    static int legacy = -1;
+    if (legacy < 0) {
+#pragma warning(suppress : 4996)
+        const char* home = std::getenv("HOME");
+        std::error_code ec;
+#pragma warning(suppress : 4996)
+        legacy = std::getenv("CALLIGRUS_FIND_LEGACY") || (home && fs::exists(fs::path(home) / "find_legacy", ec)) ? 1 : 0;
+    }
+    return legacy == 1;
+}
+
+// The document's searchable text for the layout on screen: built the first time it is asked for (after a layout
+// change), then kept.
+static const FindIndex& find_index(DocState& st, FindState& find, const Fonts& fonts, const Theme& theme, float col_w) {
+    const size_t key = layout_key(st, col_w, fonts);
+    if (!find.index_ok || find.index_key != key || find_legacy()) {
+        trace::Stopwatch sw;
+        const std::vector<Run> runs = layout_all(st, fonts, theme, col_w);
+        const double layout_ms = sw.ms();
+        find.index = build_find_index(runs);
+        find.index_key = key;
+        find.index_ok = true;
+        trace::log("find: text prepared: layout %.1f ms + index %.1f ms (%zu runs, %zu groups)", layout_ms, sw.ms() - layout_ms, runs.size(),
+                   find.index.groups.size());
+    }
+    return find.index;
+}
+
 // Recompute find matches when the query or the layout changed.
 static void update_find(DocState& st, FindState& find, const Fonts& fonts, const Theme& theme, float col_w) {
     const std::string query = find.open ? find.buf : "";
     const size_t key = layout_key(st, col_w, fonts);
-    if (query == find.query && key == find.layout_key) return;
-    const bool new_query = query != find.query;
+    const bool forced = find.enter_search;  // (Enter: run now, and for vim `/` start from where it was pressed)
+    find.enter_search = false;
+    const bool again = forced && find.vim && find.repick;  // the same query, searched again from the origin
+    if (query == find.query && key == find.layout_key && !again) {
+        find.due = 0;
+        if (forced && find.current >= 0) find.scroll_to_current = true;
+        return;
+    }
+    // Typing: wait until the keys stop (a cleared query and a layout change run at once; script mode never waits).
+    if (query != find.query && !query.empty() && !forced && !g_script_mode) {
+        const double due = find.typed_at + kFindDebounce;
+        if (ImGui::GetTime() < due) {
+            find.due = due;
+            return;
+        }
+    }
+    find.due = 0;
+    find.repick = false;
+    const bool new_query = query != find.query || again;
     find.query = query;
     find.layout_key = key;
     find.matches.clear();
     find.match_y.clear();
     if (query.empty()) {
         find.current = -1;
+        if (find.ed_text.empty()) find.index = FindIndex(), find.index_ok = false;  // (nothing needs the text now)
         return;
     }
     // Search the whole document's text, not just what is on screen.
-    const std::vector<Run> runs = layout_all(st, fonts, theme, col_w);
-    find.matches = find_matches(runs, query);
+    const FindIndex& index = find_index(st, find, fonts, theme, col_w);
+    trace::Stopwatch sw;
+    find.matches = find_matches(index, query);
     for (const TextRange& m : find.matches) {
-        auto it = std::lower_bound(runs.begin(), runs.end(), TextPos{m.first.block, m.first.tok, 0},
-                                   [](const Run& r, const TextPos& p) { return r.pos < p; });
-        find.match_y.emplace_back(it != runs.end() ? it->min.y : 0.0f, it != runs.end() ? it->max.y : 0.0f);
+        auto it = std::lower_bound(index.rows.begin(), index.rows.end(), TextPos{m.first.block, m.first.tok, 0},
+                                   [](const FindIndex::Row& r, const TextPos& p) { return r.pos < p; });
+        find.match_y.emplace_back(it != index.rows.end() ? it->min_y : 0.0f, it != index.rows.end() ? it->max_y : 0.0f);
     }
+    trace::log("find: \"%s\": %zu matches in %.2f ms", query.c_str(), find.matches.size(), sw.ms());
     const int n = int(find.matches.size());
     if (new_query && find.word_from) {
         const auto [block, dir] = *find.word_from;
@@ -1227,6 +1572,16 @@ static void update_find(DocState& st, FindState& find, const Fonts& fonts, const
                 }
         }
         find.scroll_to_current = n > 0;
+    } else if (new_query && find.vim) {
+        // `/`: the first match at or after the view position where the key was pressed (wrapping to the first one).
+        const float from = find.origin - top_pad(fonts.scale);
+        find.current = n > 0 ? 0 : -1;
+        for (int i = 0; i < n; i++)
+            if (find.match_y[size_t(i)].second > from + 1.0f) {
+                find.current = i;
+                break;
+            }
+        find.scroll_to_current = n > 0;
     } else if (new_query) {
         // Start at the first match in or below the block at the top of the view.
         const float view_doc_top = st.scroll_cur - top_pad(fonts.scale);
@@ -1243,6 +1598,7 @@ static void update_find(DocState& st, FindState& find, const Fonts& fonts, const
     } else {
         find.current = n > 0 ? std::clamp(find.current, 0, n - 1) : -1;
     }
+    if (forced && find.current >= 0) find.scroll_to_current = true;
 }
 
 // Recompute the editor-search matches when its query or the layout changed (same
@@ -1254,8 +1610,11 @@ static void update_editor_search(DocState& st, FindState& find, const Fonts& fon
     find.ed_done_case = find.ed_case;
     find.ed_key = key;
     find.ed_matches.clear();
-    if (find.ed_text.empty()) return;
-    find.ed_matches = find_matches(layout_all(st, fonts, theme, col_w), find.ed_text, find.ed_case ? 1 : 0);
+    if (find.ed_text.empty()) {
+        if (find.query.empty()) find.index = FindIndex(), find.index_ok = false;  // (nothing needs the text now)
+        return;
+    }
+    find.ed_matches = find_matches(find_index(st, find, fonts, theme, col_w), find.ed_text, find.ed_case ? 1 : 0);
 }
 
 // How far one mouse-wheel notch scrolls the document, in points (times
@@ -1434,7 +1793,7 @@ static void handle_doc_input(DocState& st, const RenderResult& r, float view_top
     if (st.over_link && !block_press && ImGui::IsMouseClicked(ImGuiMouseButton_Middle)) st.link_request = link->url, st.link_new_tab = true;
     if (link) {
         const std::string& tip = link->tip.empty() ? link->url : link->tip;
-        if (!tip.empty()) ImGui::SetTooltip("%s", tip.c_str());
+        if (!tip.empty() && tooltips_allowed()) ImGui::SetTooltip("%s", tip.c_str());
         if (!link->url.empty() || link->zoom) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
     } else if (hovered && !r.over_code_control &&
                std::any_of(runs.begin(), runs.end(), [&](const Run& run) { return run.contains(m); })) {
@@ -1678,6 +2037,33 @@ static void draw_binary_note(const DocState& st, const Theme& theme, float scale
 }
 
 // The scrolling document view. Returns the outline found while drawing.
+#ifdef __ANDROID__
+static bool g_touch_ui_only = false;  // the settings window is open: every finger belongs to its widgets
+// The pinch gesture (spec 35): scale `s` since the fingers came down, about `from` (where they were), moved to `to`.
+static struct PinchGesture {
+    bool active = false;
+    float s = 1.0f;
+    ImVec2 from{0, 0}, to{0, 0};
+    double z0 = 1.0;  // the zoom the document is laid out at
+} g_pinch;
+// Frame costs during a pinch, logged when the fingers lift (to compare ways of zooming; logcat tag "calligrus").
+static struct PinchStats {
+    bool on = false;
+    int frames = 0;
+    double work = 0, wall = 0, worst = 0, last_end = 0;
+} g_pstat;
+// A developer switch: a file named pinch_legacy in the home folder makes a pinch change the zoom (and lay the
+// document out again) at every step, as the first Android version did. Only for measuring.
+static bool pinch_legacy() {
+    static int legacy = -1;
+    if (legacy < 0) {
+        const char* home = std::getenv("HOME");
+        std::error_code ec;
+        legacy = home && fs::exists(fs::path(home) / "pinch_legacy", ec) ? 1 : 0;
+    }
+    return legacy == 1;
+}
+#endif
 static std::vector<OutlineEntry> draw_document(DocState& st, FindState& find, nav::Autoscroll& autoscroll,
                                                const Fonts& fonts, const Theme& theme, bool line_numbers, bool editor_marker,
                                                bool block_press, bool& animate) {
@@ -1698,15 +2084,18 @@ static std::vector<OutlineEntry> draw_document(DocState& st, FindState& find, na
             ImGui::SetNextWindowScroll(ImVec2(-1.0f, y));
             st.scroll_target = st.scroll_cur = st.scroll_last_set = y;
         }
-        if (st.zoom_anchor) {
+        if (st.zoom_anchor && (st.zoom_anchor_scale == 0 || std::fabs(scale - st.zoom_anchor_scale) < 0.01f)) {
+            st.zoom_anchor_scale = 0;
             // Zoom / text size changed: put the block that was at the top back there.
             float height = 0;
             layout_all(st, fonts, theme, col_w, &height);
             auto [i, frac] = *st.zoom_anchor;
             st.zoom_anchor.reset();
+            const float anchor_off = st.zoom_anchor_off;
+            st.zoom_anchor_off = 0;
             if (i < st.cache.top.size()) {
                 const float h = std::isnan(st.cache.height[i]) ? 0.0f : st.cache.height[i];
-                const float y = std::max(0.0f, std::round(top_pad(scale) + st.cache.top[i] + frac * h));
+                const float y = std::max(0.0f, std::round(top_pad(scale) + st.cache.top[i] + frac * h - anchor_off));
                 st.content_h = height + bottom_pad(scale);
                 ImGui::SetNextWindowScroll(ImVec2(-1.0f, y));
                 st.scroll_target = st.scroll_cur = st.scroll_last_set = y;
@@ -1777,6 +2166,11 @@ static std::vector<OutlineEntry> draw_document(DocState& st, FindState& find, na
     ImGui::PushStyleColor(ImGuiCol_ChildBg, theme.bg);  // the document's own background (toolbar/outline: ui.panel)
     ImGui::BeginChild("doc", ImVec2(0, 0), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollWithMouse);
     ImGui::PopStyleColor();
+#ifdef __ANDROID__  // fingers that start here scroll and zoom the document (spec 35); not under a popup or the settings window
+    android_shell::set_doc_region(ImGui::GetWindowPos().x, ImGui::GetWindowPos().y, ImGui::GetWindowPos().x + ImGui::GetWindowWidth(),
+                                  ImGui::GetWindowPos().y + ImGui::GetWindowHeight(),
+                                  g_touch_ui_only || ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel));
+#endif
     // (the scrollbar colours stay pushed: ImGui draws the bar in EndChild)
     smooth_scroll(st, fonts);
 
@@ -1784,6 +2178,7 @@ static std::vector<OutlineEntry> draw_document(DocState& st, FindState& find, na
     // Whole view width: egui's scrollbar floats over the content instead of taking space.
     st.view_w = ImGui::GetWindowWidth();
     st.view_h = ImGui::GetWindowHeight();
+    st.view_y = ImGui::GetWindowPos().y;
     if (!st.binary.empty()) {  // not a text file: a note and a button instead of the document
         draw_binary_note(st, theme, scale);
         ImGui::EndChild();
@@ -1798,6 +2193,19 @@ static std::vector<OutlineEntry> draw_document(DocState& st, FindState& find, na
     float view_top = ImGui::GetWindowPos().y;
     float view_bottom = view_top + st.view_h;
     const bool hovered = ImGui::IsWindowHovered();
+    // A pinch is on: what is drawn gets scaled afterwards, so blocks are drawn for the range that maps onto the view.
+    const bool pinch_view = st.pinch_s != 1.0f;
+    if (pinch_view) {
+        const float inv = 1.0f / st.pinch_s;
+        view_top = st.pinch_from.y + (view_top - st.pinch_to.y) * inv;
+        view_bottom = st.pinch_from.y + (view_bottom - st.pinch_to.y) * inv;
+    }
+    ImDrawList* doc_dl = ImGui::GetWindowDrawList();
+    int pinch_cmd0 = 0, pinch_vtx0 = 0;
+    if (pinch_view) {
+        doc_dl->AddDrawCmd();  // (a command of its own, so no earlier shape shares it)
+        pinch_cmd0 = doc_dl->CmdBuffer.Size - 1, pinch_vtx0 = doc_dl->VtxBuffer.Size;
+    }
 
     // Middle-click autoscroll starts over the document.
     if (hovered && !st.over_link && ImGui::IsMouseClicked(ImGuiMouseButton_Middle)) {  // (over a link it opens a tab, spec 34)
@@ -1818,9 +2226,16 @@ static std::vector<OutlineEntry> draw_document(DocState& st, FindState& find, na
     opts.mouse_in_view = hovered;
     opts.find = find.open ? &find.matches : find.ed_matches.empty() ? nullptr : &find.ed_matches;
     opts.find_current = find.open ? find.current : -1;
-    RenderResult r = render_document(ImGui::GetWindowDrawList(), st.doc, fonts, theme, origin, col_w, st.cache,
+    RenderResult r = render_document(doc_dl, st.doc, fonts, theme, origin, col_w, st.cache,
                                      st.version, view_top, view_bottom, base_dir(st), st.runs, st.sel.range(),
                                      ImGui::GetColorU32(ImGuiCol_TextSelectedBg), opts);
+#ifdef __ANDROID__  // wide code blocks and formulas: a sideways finger drag on them scrolls them (spec 35)
+    {
+        std::vector<android_shell::HScrollBlock> hb;
+        for (const HBlock& b : r.hblocks) hb.push_back({b.min.x, b.min.y, b.max.x, b.max.y, b.key});
+        android_shell::set_hscroll_blocks(hb);
+    }
+#endif
 
     if (editor_marker) draw_cursor_marker(ImGui::GetWindowDrawList(), st, theme, origin, scale);
     // Marks (spec 28): their letters, faint, in the margin left of the text, at the spot that was
@@ -1834,6 +2249,24 @@ static std::vector<OutlineEntry> draw_document(DocState& st, FindState& find, na
             const float w = text_width(fonts.regular, size, adv, m.label);
             draw_text(ImGui::GetWindowDrawList(), fonts.regular, size, adv, ImVec2(std::round(origin.x - 10.0f * scale - w), std::round(y)),
                       theme.weak, m.label);
+        }
+    }
+
+    if (pinch_view) {  // the GPU-side zoom: scale what was just drawn about the pinch point (clip rects too)
+        const float k = st.pinch_s;
+        const ImVec2 from = st.pinch_from, to = st.pinch_to;
+        auto map = [&](float x, float y) { return ImVec2(to.x + (x - from.x) * k, to.y + (y - from.y) * k); };
+        for (int i = pinch_vtx0; i < doc_dl->VtxBuffer.Size; i++) {
+            ImDrawVert& v = doc_dl->VtxBuffer[i];
+            v.pos = map(v.pos.x, v.pos.y);
+        }
+        const ImVec2 wmin = ImGui::GetWindowPos(), wmax(wmin.x + ImGui::GetWindowWidth(), wmin.y + ImGui::GetWindowHeight());
+        for (int c = pinch_cmd0; c < doc_dl->CmdBuffer.Size; c++) {
+            ImVec4& cr = doc_dl->CmdBuffer[c].ClipRect;
+            const ImVec2 a = map(cr.x, cr.y), b = map(cr.z, cr.w);
+            cr = ImVec4(std::max(a.x, wmin.x), std::max(a.y, wmin.y), std::min(b.x, wmax.x), std::min(b.y, wmax.y));
+            if (cr.z < cr.x) cr.z = cr.x;
+            if (cr.w < cr.y) cr.w = cr.y;
         }
     }
 
@@ -2597,7 +3030,11 @@ static const char* kHelp =
     "without a ~/.config folder); CALLIGRUS_CONFIG points to another file. The first screen\n"
     "of the app lists the keys. More: https://github.com/theKAOSSphere/calligrus";
 
+#ifdef __ANDROID__
+int calligrus_main() {  // (called by android_main)
+#else
 int main() {
+#endif
     if (auto a = platform::args(); !a.empty() && (a[0] == "--help" || a[0] == "-h" || a[0] == "--version")) {
         script_log(a[0] == "--version" ? std::string("calligrus ") + CALLIGRUS_VERSION : std::string(kHelp));
         return 0;
@@ -2745,8 +3182,11 @@ int main() {
     // event loop so a named font waiting for it is applied right away.
     // (g_glfw_alive: don't post to GLFW after it was shut down.)
     static std::atomic<bool> g_glfw_alive{true};
+    g_glfw_alive = true;  // (Android: the process outlives the activity, and main runs again)
     FontIndex font_index;
+    trace::log("start-up: font index starting");
     font_index.start([] {
+        trace::log("font index ready");
         if (g_glfw_alive) glfwPostEmptyEvent();
     });
 
@@ -2809,7 +3249,7 @@ int main() {
     if (g_script_mode) io.KeyRepeatDelay = 1.0e9f;
 
     ImGui_ImplGlfw_InitForOpenGL(window, true);
-    ImGui_ImplOpenGL3_Init("#version 330");
+    ImGui_ImplOpenGL3_Init(kGlslVersion);
 
     highlight_warm_up();  // parse the syntax grammars on a background thread
     const std::vector<std::string> entry_names = highlight_entry_names();
@@ -2896,6 +3336,17 @@ int main() {
     std::shared_ptr<SysJob> sys_job;
     std::vector<char32_t> sys_missing;  // characters no font has, waiting for the font index
     bool sys_check = true;              // look for such characters (the document or the fonts changed)
+    // The characters a font search has been started for (a later search for them would find nothing new), and
+    // whether the search under way is for new ones. While one is pending the document is shown at once, with the
+    // characters nothing has a glyph for as blank space (`sys_blank`, never boxes); the frame after the fonts
+    // arrive has the text.
+    std::set<char32_t> sys_tried;
+    bool sys_job_fresh = false;
+    bool sys_blank = false;
+    double frame_ms = 0;       // trace: the start of this frame
+    double fonts_applied = -1; // trace: when the atlas was last rebuilt for new fonts (the frame after is timed)
+    double fonts_load_ms = 0;
+    bool first_frame_logged = false;
     auto sys_busy = [&](const Config& c) { return c.system_fallback && (sys_check || !sys_missing.empty() || sys_job); };
     fonts.scale = dpi * float(conf.cfg.zoom);
     fonts.body = float(conf.cfg.body_size) * fonts.scale;
@@ -2924,12 +3375,19 @@ int main() {
     if (const char* q = std::getenv("CALLIGRUS_FIND")) {
         find.open = true;
         std::snprintf(find.buf, sizeof(find.buf), "%s", q);
+        find.typed = find.buf;
     }
     nav::VimKeys vim;
     nav::Autoscroll autoscroll;
     std::vector<OutlineEntry> outline;
     auto last_poll = Clock::now();
     int extra_frames = 2;
+#ifdef __ANDROID__
+    bool android_idle = false;      // as of the last frame: nothing is moving into place (see the power notes in spec 35)
+    bool render_deadline = false;   // the wait was cut short by a deadline that needs a frame (not just the config write)
+    double quiet_until = 0;         // after input, frames keep coming a little while (hover delays, tooltips)
+    int shown_frames = 0;
+#endif
     std::string applied_style;      // theme name + scale the ImGui style was made for
     bool shown = false;
     std::string title_key = "\x01";  // which document the window title shows
@@ -3019,7 +3477,7 @@ int main() {
         glfwMakeContextCurrent(presenter.win);
         glfwSwapInterval(0);  // (the main window waits for vsync already)
         ImGui_ImplGlfw_InitForOpenGL(presenter.win, false);
-        ImGui_ImplOpenGL3_Init("#version 330");
+        ImGui_ImplOpenGL3_Init(kGlslVersion);
         glfwMakeContextCurrent(window);
         ImGui::SetCurrentContext(main_ctx);
     };
@@ -3127,6 +3585,14 @@ int main() {
         }
         save_state_guarded(state_file, state, conf.cfg.remember_window);
     };
+#ifdef __ANDROID__
+    // The app may be killed once it is in the background: flush the config and the state file when it goes (spec 35).
+    android_shell::set_background_hook([&] {
+        trace::log("background: writing %zu pending config keys and the state file", conf.pending.size());
+        conf.flush(glfwGetTime(), true);
+        save_state_file();
+    });
+#endif
     // Show `p` (a new file, or the same one with an anchor / scroll position).
     // `push`: a new navigation (history gets the old place); `restore`: scroll offset in points (history step).
     auto navigate = [&](const fs::path& p, const std::string& anchor, bool push, std::optional<float> restore) {
@@ -3365,6 +3831,8 @@ int main() {
         find.open = true;
         find.focus = false;
         std::snprintf(find.buf, sizeof(find.buf), "%s", word.c_str());
+        find.typed = find.buf;  // (not typing: no waiting)
+        find.vim = false;
         find.query.clear();  // (searched again, even for the same word)
         find.word_from = {block, dir};
     };
@@ -3800,6 +4268,14 @@ int main() {
                     return script_fail(c, "expect-tabs: " + std::to_string(tabs.size()) + " tabs, tab " + std::to_string(active_tab + 1) + " active; expected " +
                                               std::to_string(size_t(c.a)) + " and " + std::to_string(size_t(c.b)));
                 return true;
+            case Kind::ExpectFind: {
+                const char* state = !find.open ? "closed" : io.WantTextInput ? "field" : "doc";
+                const int n = int(find.matches.size()), cur = find.current + 1;
+                if (c.text != state || (c.text != "closed" && (n != int(c.a) || cur != int(c.b))))
+                    return script_fail(c, std::string("expect-find: ") + state + ", " + std::to_string(n) + " matches, current " + std::to_string(cur) + "; expected " + c.text +
+                                              (c.text == "closed" ? "" : ", " + std::to_string(int(c.a)) + ", " + std::to_string(int(c.b))));
+                return true;
+            }
             case Kind::ExpectTitle:
                 if (window_title != c.text) return script_fail(c, "expect-title: title is '" + window_title + "', expected '" + c.text + "'");
                 return true;
@@ -3858,17 +4334,42 @@ int main() {
     while (!glfwWindowShouldClose(window)) {
         // Sleep until input arrives (or a timeout, so live reload and the
         // config writer still run), but keep drawing while things move.
-        const bool busy = st.animating || autoscroll.active() || extra_frames > 0;
+        bool busy = st.animating || autoscroll.active() || extra_frames > 0;
+#ifdef __ANDROID__
+        busy = busy || android_shell::touch_busy();  // (a finger down, a fling, a tap being delivered)
+#endif
         if (g_script_mode) {
             if (!script_pump()) break;
             glfwPollEvents();
         } else if (busy) glfwPollEvents();
+#ifdef __ANDROID__
+        else if (!android_shell::legacy_power()) {
+            // Spec 35 (power): sleep until input / a job / a real deadline wakes us; no timer when nothing is due.
+            double timeout = 1e9;  // (the window layer waits without a timeout)
+            render_deadline = false;
+            const double t_now = glfwGetTime();
+            auto soon = [&](double seconds, bool renders) {
+                timeout = std::min(timeout, std::max(seconds, 0.0) + 0.01);
+                render_deadline = render_deadline || renders;
+            };
+            if (!conf.pending.empty()) soon(conf.due - t_now, false);                             // the debounced config write
+            if (st.bar_wake > 0) soon(st.bar_wake - ImGui::GetTime(), true);                      // the scrollbar goes
+            if (!st.toast.empty()) soon(st.toast_since + 1.6 - ImGui::GetTime(), true);          // the toast goes
+            if (find.due > 0) soon(find.due - ImGui::GetTime(), true);                            // a find search waiting for the typing to stop
+            if (quiet_until > t_now) soon(0.2, true);                                             // hover delays, tooltips, widget fades settle
+            if (io.WantTextInput) soon(0.5, true);                                                // the caret blinks
+            if (!android_idle) soon(0.016, true);                                                 // something is still moving into place
+            glfwWaitEventsTimeout(timeout);
+        }
+#endif
         else {
             double timeout = conf.pending.empty() ? 0.5 : 0.1;
             // Hide the scrollbar on time (bar_wake is on ImGui's clock, which stands at the last frame).
             if (st.bar_wake > 0) timeout = std::clamp(st.bar_wake - ImGui::GetTime() + 0.01, 0.0, timeout);
             // Likewise the toast (draw_toast).
             if (!st.toast.empty()) timeout = std::clamp(st.toast_since + 1.6 - ImGui::GetTime() + 0.01, 0.0, timeout);
+            // Likewise a find search waiting for the typing to stop.
+            if (find.due > 0) timeout = std::clamp(find.due - ImGui::GetTime() + 0.01, 0.0, timeout);
             glfwWaitEventsTimeout(timeout);
         }
         if (g_input) {
@@ -3878,6 +4379,19 @@ int main() {
             extra_frames--;
         }
         const double now = glfwGetTime();
+        frame_ms = trace::now_ms();
+#ifdef __ANDROID__
+        if (!g_script_mode && !android_shell::legacy_power()) {
+            const bool woken = android_shell::consume_woken();  // input, a job, a window event: not just a timer
+            if (woken) quiet_until = now + 1.0;
+            if (!woken && !busy && android_idle && extra_frames == 0 && !render_deadline && fonts_ready && shown_frames >= 3) {
+                // Only a timer ran out (the config write): no frame, no buffer swap.
+                conf.flush(now);
+                android_shell::count_skipped();
+                continue;
+            }
+        }
+#endif
         if (g_editor && !g_script_mode) {
             std::deque<std::string> lines;
             bool eof = false;
@@ -3915,7 +4429,13 @@ int main() {
             normal_frame_t = t;
             tracked = true;
         }
+#ifdef __ANDROID__
+        // Opened files are local copies, the config and themes are ours: nothing to watch. Only the night mode can change.
+        if (!android_shell::legacy_power()) system_dark = platform::system_prefers_dark();
+        if (android_shell::legacy_power() && Clock::now() - last_poll > std::chrono::seconds(1)) {
+#else
         if (Clock::now() - last_poll > std::chrono::seconds(1)) {
+#endif
             st.poll();
             for_waiting([](Tab& t) { t.st.poll(); });  // (the other tabs' files too)
             // Pictures changed on disk: load them again and measure the document again.
@@ -3951,6 +4471,7 @@ int main() {
             for (const std::string& e : font_choice.result.errors) st.error = e;  // font "X" not found
         // Spec 30: look for characters no font has; if there are any, choose installed fonts for them
         // in the background and add them to the chains (the atlas is then rebuilt below).
+        auto sys_search = [&] {
         if (cfg.system_fallback && fonts_ready) {
             if (sys_job && sys_job->done) {  // a choice came back: keep its faces, up to the session's limit
                 for (const FontSource& s : sys_job->result)
@@ -3969,14 +4490,25 @@ int main() {
                     return g && int(g->SourceIdx) != font->Sources.Size - 1;
                 };
                 auto has_any = [&](char32_t c) { return has(fonts.regular, c) || has(fonts.mono, c); };
-                sys_missing = sysfont::missing_chars(sysfont::document_chars(st.doc), has_any);
+                trace::Stopwatch sw;
+                const std::set<char32_t> chars = sysfont::document_chars(st.doc);
+                sys_missing = sysfont::missing_chars(chars, has_any);
+                trace::log("check: %zu distinct characters, %zu without a glyph (%.1f ms)", chars.size(), sys_missing.size(), sw.ms());
             }
             const size_t room = std::min(sysfont::kMaxPerPick, sysfont::kMaxPerSession - std::min(sys_fonts.size(), sysfont::kMaxPerSession));
             if (!sys_missing.empty() && !sys_job && font_index.ready() && room > 0) {
                 auto job = std::make_shared<SysJob>();
-                std::thread([job, faces = font_index.faces(), missing = std::move(sys_missing), room] {
+                sys_job_fresh = false;
+                for (char32_t c : sys_missing) sys_job_fresh = sys_job_fresh || sys_tried.insert(c).second;
+                std::thread([job, index = font_index, missing = std::move(sys_missing), room] {
                     try {
-                        job->result = sysfont::pick_system_fonts(faces, missing, room);
+                        // The font file is read here too, so the UI thread only hands it to the atlas.
+                        if (const int delay = debug_font_delay_ms()) std::this_thread::sleep_for(std::chrono::milliseconds(delay));
+                        trace::Stopwatch sw;
+                        job->result = sysfont::pick_system_fonts(index.faces(), missing, room, [&index](const FontFace& f) { return index.coverage(f); });
+                        const double picked = sw.ms();
+                        prefetch_font_files(job->result);
+                        trace::log("pick: %zu missing characters -> %zu fonts (%.1f ms to pick, %.1f ms to read the files)", missing.size(), job->result.size(), picked, sw.ms() - picked);
                     } catch (...) {
                     }
                     job->done = true;
@@ -3988,13 +4520,25 @@ int main() {
                 sys_missing.clear();
             }
         }
+        {  // Spec 30: while fonts for missing characters are being found, those characters are blank, not boxes
+            bool pending = cfg.system_fallback && !g_script_mode && (sys_check || (sys_job && sys_job_fresh));
+            for (char32_t c : sys_missing) pending = pending || (cfg.system_fallback && !g_script_mode && !sys_tried.count(c));
+            sys_blank = pending;
+            set_blank_missing(sys_blank);
+        }
+        };
+        sys_search();  // (and once more right after the first atlas is built, below: the search starts before the first frame is drawn)
         FontFiles want_fonts = font_choice.result.files;
         if (cfg.system_fallback) want_fonts.system = sys_fonts;
+        const bool first_build = !fonts_ready;
         if (!fonts_ready || fonts_dark != theme.dark || !(want_fonts == fonts_loaded)) {
             // (Re)build the atlas: new font files, or the dark-mode coverage boost changed.
             const float scale = fonts.scale, body = fonts.body;
+            trace::Stopwatch load_sw;
             io.Fonts->Clear();
             fonts = load_fonts(want_fonts, theme.dark);
+            fonts_load_ms = load_sw.ms();
+            if (!want_fonts.system.empty()) fonts_applied = trace::now_ms();
             fonts.scale = scale;
             fonts.body = body;
             for (const std::string& e : fonts.errors) st.error = e;
@@ -4006,6 +4550,7 @@ int main() {
             slides.measured = 0;
             for_waiting([](Tab& t) { t.st.cache.key = 0, t.slides.measured = 0; });
         }
+        if (first_build) sys_search();
         float want_scale = dpi * float(cfg.zoom);
         if (slides.on) {  // the slide's own zoom (user zoom is ignored here and kept for normal mode)
             slides_prepare(slides, st, fonts, theme, dpi, cfg.body_size, st.view_w > 0 ? st.view_w : io.DisplaySize.x,
@@ -4032,11 +4577,19 @@ int main() {
             fonts.body = want_body;
             g_max_width = float(cfg.max_width);
         }
-        const float scale = fonts.scale;  // pixels per point: DPI x zoom (the toolbar zooms too, like egui)
+        const float doc_scale = fonts.scale;  // pixels per point in the document: DPI x zoom
+#ifdef __ANDROID__
+        const float scale = dpi;  // the toolbar and widgets keep their size: only the document zooms (spec 35)
+#else
+        const float scale = doc_scale;  // (the toolbar zooms too, like egui)
+#endif
         const std::string style_key = theme.name + "@" + std::to_string(scale);
         if (applied_style != style_key) {
             apply_style(theme, scale);
             platform::set_dark_title_bar(native_window(window), theme.dark);
+#ifdef __ANDROID__
+            android_shell::set_light_bars(!theme.dark);  // (status bar icons that show on this theme)
+#endif
             applied_style = style_key;
         }
         if (!shown) {
@@ -4147,6 +4700,86 @@ int main() {
             }
         }
 
+#ifdef __ANDROID__
+        {  // Fingers on the document (spec 35): a drag and a fling scroll, a pinch zooms.
+            g_touch_ui_only = ui.settings_open;
+            android_shell::set_raw_touch(ui.settings_open);
+            const android_shell::DocTouch t = android_shell::doc_touch();
+            const bool doc_view = !slides.on && !pg.on;
+            // A pinch only scales the drawn document (draw_document), about the fingers; the layout at the new
+            // zoom happens once, when the fingers lift (and the block under them is put back under them).
+            bool pinch_ended = false;
+            if (doc_view && t.pinching) {
+                g_pstat.on = true;
+            } else if (g_pstat.on) {
+                __android_log_print(ANDROID_LOG_INFO, "calligrus", "pinch %s: %d frames, %.1f ms of work per frame (worst %.1f), %.1f ms between frames",
+                                    pinch_legacy() ? "legacy relayout" : "scaled picture", g_pstat.frames,
+                                    g_pstat.frames ? g_pstat.work / g_pstat.frames * 1000 : 0.0, g_pstat.worst * 1000,
+                                    g_pstat.frames ? g_pstat.wall / g_pstat.frames * 1000 : 0.0);
+                g_pstat = PinchStats();
+            }
+            if (pinch_legacy() && doc_view) {
+                if (t.zoom != 1.0f) {
+                    const double z = std::round(std::clamp(double(cfg_w.zoom) * double(t.zoom), double(nav::kZoomMin), double(nav::kZoomMax)) * 100.0) / 100.0;
+                    if (z != cfg_w.zoom) cfg_w.zoom = z, conf.queue({{"zoom", toml_float(z)}}, now);
+                }
+            } else if (doc_view && t.pinching) {
+                if (!g_pinch.active) g_pinch = {true, 1.0f, ImVec2(t.focus_x, t.focus_y), ImVec2(t.focus_x, t.focus_y), cfg_w.zoom};
+                g_pinch.s = std::clamp(g_pinch.s * t.zoom, float(nav::kZoomMin / g_pinch.z0), float(nav::kZoomMax / g_pinch.z0));
+                g_pinch.to = ImVec2(t.focus_x, t.focus_y);
+            } else if (g_pinch.active) {
+                pinch_ended = true;
+                g_pinch.active = false;
+                const double z = std::round(std::clamp(g_pinch.z0 * double(g_pinch.s), double(nav::kZoomMin), double(nav::kZoomMax)) * 100.0) / 100.0;
+                const auto& tops = st.cache.top;
+                if (z != cfg_w.zoom && !tops.empty() && tops.size() == st.cache.height.size()) {
+                    const float doc_y = st.scroll_cur + (g_pinch.from.y - st.view_y) - top_pad(fonts.scale);
+                    size_t i = size_t(std::upper_bound(tops.begin(), tops.end(), doc_y) - tops.begin());
+                    i = i > 0 ? i - 1 : 0;
+                    const float h = st.cache.height[i];
+                    const float frac = std::isnan(h) || h <= 0 ? 0.0f : std::clamp((doc_y - tops[i]) / h, 0.0f, 1.0f);
+                    st.zoom_anchor = {i, frac};
+                    st.zoom_anchor_off = g_pinch.to.y - st.view_y;
+                    st.zoom_anchor_scale = dpi * float(z);
+                }
+                if (z != cfg_w.zoom) {
+                    cfg_w.zoom = z;
+                    conf.queue({{"zoom", toml_float(z)}}, now);
+                }
+            }
+            st.pinch_s = 1.0f;
+            if (g_pinch.active || pinch_ended) {  // (the frame the fingers lift still draws the scaled picture: the layout comes next frame)
+                st.pinch_s = g_pinch.s, st.pinch_from = g_pinch.from, st.pinch_to = g_pinch.to;
+            }
+            auto scroll_by = [&](float dy) {  // returns how far the content really moved
+                if (dy == 0) return 0.0f;
+                const float max_scroll = std::max(0.0f, st.content_h - st.view_h);
+                const float to = st.scroll_target - dy;
+                if (to < 0 || to > max_scroll) android_shell::doc_touch_hit_end();  // a fling stops at the ends
+                const float at = std::clamp(to, 0.0f, max_scroll);
+                const float moved = st.scroll_target - at;
+                st.scroll_target = st.scroll_cur = at;  // 1:1 with the finger: no easing
+                return moved;
+            };
+            if (doc_view && t.h_key && t.h_dx != 0 && !g_pinch.active) {  // a sideways drag / fling of a wide block
+                bool end = false;
+                render_scroll_h(st.cache, static_cast<const char*>(t.h_key), t.h_dx, &end);
+                if (end) android_shell::doc_touch_hit_end_h();
+            }
+            static float fling_scrolled = 0, fling_v = 0, fling_total = 0;
+            static bool fling_seen = false;
+            if (doc_view && !g_pinch.active && !pinch_ended) {
+                scroll_by(t.scroll_dy - t.fling_dy);
+                fling_scrolled -= scroll_by(t.fling_dy);  // (moved is negative when the content goes up the page)
+            }
+            if (t.fling_active) fling_seen = true, fling_v = t.fling_v, fling_total = t.fling_total;
+            else if (fling_seen) {  // the fling is over: what it was meant to cover, and what it did
+                __android_log_print(ANDROID_LOG_INFO, "calligrus", "fling: lift %.0f px/s, AOSP distance %.1f px, scrolled %.1f px", fling_v, std::fabs(fling_total), std::fabs(fling_scrolled));
+                fling_seen = false, fling_scrolled = 0;
+            }
+        }
+#endif
+
         // Navigation keys (spec 2): vim keys and the standard ones.
         const float line = 1.55f * fonts.body;
         auto run = [&](const nav::Command& cmd) {
@@ -4176,13 +4809,26 @@ int main() {
                 case Action::NextHeading:
                 case Action::PrevHeading: {
                     std::vector<float> tops;
-                    for (const OutlineEntry& e : outline) tops.push_back(heading_scroll(e, scale));
+                    for (const OutlineEntry& e : outline) tops.push_back(heading_scroll(e, doc_scale));
                     std::sort(tops.begin(), tops.end());
                     const int n = cmd.action == Action::NextHeading ? cmd.count : -cmd.count;
                     if (auto y = nav::heading_target(tops, st.scroll_target, n)) st.scroll_target = *y;
                     break;
                 }
                 case Action::OpenFind:
+                    // Ctrl+F: browser style. `/`: vim style (spec 7): the search starts here, and comes back with the last query selected.
+                    find.vim = !io.KeyCtrl;
+                    if (find.vim) {
+                        auto slash = std::find(io.InputQueueCharacters.begin(), io.InputQueueCharacters.end(), ImWchar('/'));
+                        if (slash != io.InputQueueCharacters.end()) io.InputQueueCharacters.erase(slash);  // (the field must not get the key as text)
+                        find.origin = st.scroll_cur;
+                        find.repick = true;
+                        find.select_all = true;
+                        if (find.buf[0] == 0 && !find.last_query.empty()) {
+                            std::snprintf(find.buf, sizeof(find.buf), "%s", find.last_query.c_str());
+                            find.typed = find.buf;
+                        }
+                    }
                     find.open = true;
                     find.focus = true;
                     break;
@@ -4290,7 +4936,7 @@ int main() {
         } else {
             vim.reset();
             // In a text field only these still work.
-            if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_F)) find.focus = true;
+            if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_F)) find.focus = true, find.vim = false;  // (browser style from now on)
             if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_B)) ui.show_outline = !ui.show_outline;
             if (ImGui::IsKeyPressed(ImGuiKey_Escape) && find.open && !ui.theme_picker.active) find.close();  // (Esc belongs to the theme picker)
         }
@@ -4314,8 +4960,26 @@ int main() {
         // --- the window --------------------------------------------------------
         // One window covering the whole OS window.
         const ImGuiViewport* vp = ImGui::GetMainViewport();
-        ImGui::SetNextWindowPos(vp->WorkPos);
-        ImGui::SetNextWindowSize(vp->WorkSize);
+        ImVec2 work_pos = vp->WorkPos, work_size = vp->WorkSize;
+#ifdef __ANDROID__  // the system bars and the camera cut-out are not ours: the window sits inside them
+        {
+            const android_shell::Insets in = android_shell::insets();
+            work_pos.x += in.left, work_pos.y += in.top;
+            work_size.x -= in.left + in.right, work_size.y -= in.top + in.bottom;
+            ImGui::GetBackgroundDrawList()->AddRectFilled(ImVec2(0, 0), ImVec2(io.DisplaySize.x, work_pos.y), ImGui::GetColorU32(ImGuiCol_WindowBg));  // (under the status bar)
+        }
+#endif
+#ifdef __ANDROID__
+        {  // a narrow screen (a phone held upright, under 600 dp) starts with the outline hidden: it would take half of it
+            static bool outline_decided = false;
+            if (!outline_decided && work_size.x > 0) {
+                outline_decided = true;
+                if (work_size.x < 600.0f * dpi) ui.show_outline = false;
+            }
+        }
+#endif
+        ImGui::SetNextWindowPos(work_pos);
+        ImGui::SetNextWindowSize(work_size);
         // The full-window panel: no padding, no border, square corners.
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
@@ -4346,14 +5010,14 @@ int main() {
                 const fs::path& p = tab_doc(i).path;
                 labels.push_back(p.empty() ? TabLabel{"demo", "the built-in demo"} : TabLabel{tab_name(to_utf8(p.filename())), display_path(p)});
             }
-            tab_click = draw_tab_bar(labels, active_tab, ui, theme, fonts, vp->WorkPos.y + bar_h, tab_h, pad_x, pad_y, scale);
-            const float tab_line_y = std::round(vp->WorkPos.y + bar_h + tab_h) - 1.0f;
-            frame_dl->AddRectFilled(ImVec2(vp->WorkPos.x, tab_line_y), ImVec2(vp->WorkPos.x + vp->WorkSize.x, tab_line_y + 1.0f), sep);
+            tab_click = draw_tab_bar(labels, active_tab, ui, theme, fonts, work_pos.y + bar_h, tab_h, pad_x, pad_y, scale);
+            const float tab_line_y = std::round(work_pos.y + bar_h + tab_h) - 1.0f;
+            frame_dl->AddRectFilled(ImVec2(work_pos.x, tab_line_y), ImVec2(work_pos.x + work_size.x, tab_line_y + 1.0f), sep);
         }
         ImGui::SetCursorPos(ImVec2(0, bar_h + tab_h));
         // A whole-pixel rect, not AddLine: a 1 px AA line that straddles two pixel rows comes out half as dark.
-        const float line_y = std::round(vp->WorkPos.y + bar_h) - 1.0f;
-        if (!bare) frame_dl->AddRectFilled(ImVec2(vp->WorkPos.x, line_y), ImVec2(vp->WorkPos.x + vp->WorkSize.x, line_y + 1.0f), sep);
+        const float line_y = std::round(work_pos.y + bar_h) - 1.0f;
+        if (!bare) frame_dl->AddRectFilled(ImVec2(work_pos.x, line_y), ImVec2(work_pos.x + work_size.x, line_y + 1.0f), sep);
 
         // Optional error row (like the Rust version's error panel).
         if (!st.error.empty()) {
@@ -4386,7 +5050,7 @@ int main() {
             ImVec2 wmin = ImGui::GetWindowPos();
             const float wx = std::round(wmin.x + ImGui::GetWindowWidth()) - 1.0f;  // whole pixel column (a 1 px AA line would be half as dark)
             ImGui::EndChild();
-            frame_dl->AddRectFilled(ImVec2(wx, wmin.y), ImVec2(wx + 1.0f, vp->WorkPos.y + vp->WorkSize.y), sep);
+            frame_dl->AddRectFilled(ImVec2(wx, wmin.y), ImVec2(wx + 1.0f, work_pos.y + work_size.y), sep);
             ImGui::SameLine(0, 0);
         }
         poll_export();
@@ -4427,7 +5091,7 @@ int main() {
             outline = draw_document(st, find, autoscroll, fonts, theme, cfg.code_line_numbers, cfg.editor_marker, block_press, animate);
         }
         if (find_rule_y >= 0)
-            ImGui::GetForegroundDrawList()->AddRectFilled(ImVec2(vp->WorkPos.x, find_rule_y), ImVec2(vp->WorkPos.x + vp->WorkSize.x, find_rule_y + 1.0f), sep);
+            ImGui::GetForegroundDrawList()->AddRectFilled(ImVec2(work_pos.x, find_rule_y), ImVec2(work_pos.x + work_size.x, find_rule_y + 1.0f), sep);
         if (animate) extra_frames = std::max(extra_frames, 2);
 
         // Anchor jump (the outline now belongs to the document just drawn).
@@ -4447,10 +5111,10 @@ int main() {
                 const size_t b = size_t(std::upper_bound(tops.begin(), tops.end(), y + 0.5f) - tops.begin());
                 show_block(b > 0 ? b - 1 : 0);
             } else if (it != slugs.end()) {
-                st.scroll_to = heading_scroll(outline[size_t(it - slugs.begin())], scale);
+                st.scroll_to = heading_scroll(outline[size_t(it - slugs.begin())], doc_scale);
             } else if (int fb = footnote_block(st.doc, st.pending_anchor); fb >= 0 && size_t(fb) < st.cache.top.size()) {
                 if (slides.on) show_block(size_t(fb));
-                else st.scroll_to = std::max(0.0f, st.cache.top[size_t(fb)] - 8.0f * scale);
+                else st.scroll_to = std::max(0.0f, st.cache.top[size_t(fb)] - 8.0f * doc_scale);
             }
             st.pending_anchor.clear();
             extra_frames = std::max(extra_frames, 3);
@@ -4528,6 +5192,31 @@ int main() {
             if (!script_idle) std::this_thread::sleep_for(std::chrono::milliseconds(8));  // animations use real time
         } else {
             glfwSwapBuffers(window);
+#ifdef __ANDROID__
+            shown_frames++;
+            android_idle = !st.animating && !autoscroll.active() && st.restore_y < 0 && st.pending_anchor.empty() && st.scroll_to < 0 && !st.sync_pending &&
+                           !st.sync_reapply && fonts_ready && !(conf.cfg.system_fallback && (sys_check || !sys_missing.empty())) && !st.zoom_anchor;
+            android_shell::count_frame();
+#endif
+            if (!first_frame_logged && fonts_ready) {
+                first_frame_logged = true;
+                trace::log("first frame shown at %.1f ms (the frame took %.1f ms; blank characters: %s)", trace::now_ms(), trace::now_ms() - frame_ms, sys_blank ? "yes" : "no");
+            }
+            if (fonts_applied >= 0) {  // the frame in which new system fonts were put in the atlas: it also laid the text out again
+                trace::log("fonts applied: atlas rebuilt in %.1f ms (font files, FreeType), the frame with the new fonts (relayout and draw) took %.1f ms in all",
+                           fonts_load_ms, trace::now_ms() - frame_ms);
+                fonts_applied = -1;
+            }
+#ifdef __ANDROID__
+            if (g_pstat.on) {
+                const double end = glfwGetTime();
+                g_pstat.frames++;
+                g_pstat.work += end - now;
+                g_pstat.worst = std::max(g_pstat.worst, end - now);
+                if (g_pstat.last_end > 0) g_pstat.wall += end - g_pstat.last_end;
+                g_pstat.last_end = end;
+            }
+#endif
             // The presenter window: opened / closed with `s` (and slides mode), drawn after the main one.
             const bool want_presenter = slides.on && slides.presenter;
             if (want_presenter && !presenter.win) presenter_open();
@@ -4537,6 +5226,9 @@ int main() {
             pacer.pace();
         }
     }
+#ifdef __ANDROID__
+    android_shell::set_background_hook(nullptr);
+#endif
     presenter_close();
     conf.flush(glfwGetTime(), true);  // don't lose a change made just before closing
     save_state_file();

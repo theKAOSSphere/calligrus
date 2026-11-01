@@ -17,7 +17,11 @@
 #define NOMINMAX
 #include <windows.h>
 #endif
+#ifdef __ANDROID__
+#include <GLES3/gl3.h>
+#else
 #include <GL/gl.h>  // GL 1.1 texture calls are exported by opengl32 directly
+#endif
 
 #include "platform.h"
 

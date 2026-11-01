@@ -27,6 +27,8 @@ In the sections below, `<root>` stands for the repository folder.
 - Keep the reading position: the block at the top of the view stays at the top
   after a zoom change.
 - The zoom level is saved to the config (`zoom`), see §5.
+- Android (§35): the zoom applies to the document only (the toolbar and widgets keep their size), and a
+  pinch zooms around the fingers.
 
 ## 2. Vim-style keys
 
@@ -40,12 +42,13 @@ Active when `vim_keys = true` (default true) and no text field has focus
 | `f` / `b`, `Space` / `Shift+Space`, `PageDown` / `PageUp` | a page down / up (page = view height − 2 lines) |
 | `g g` / `G`, `Home` / `End` | top / bottom |
 | `]` `]` / `[` `[` | next / previous heading (scroll it to the top, like clicking it in the outline) |
-| `/`, `Ctrl+F` | open the find bar (§7) |
-| `n` / `N` | next / previous find match (when there is a query) |
+| `/` | open the find bar, vim style (§7): Enter searches and returns the keys to the document |
+| `Ctrl+F` | open the find bar, browser style (§7): Enter = next match, the field keeps focus |
+| `n` / `N` | next / previous find match (when there is a query; after `/` Enter they step through the matches) |
 | `o`, `Ctrl+B` | toggle the outline panel |
 | `r` | reload (`F5` is slides on / off, §26) |
 | `t` | open the theme picker (§6.1); in slides mode `t` is the presenter clock instead (§26). `g t` / `g T` stay next / previous tab (§34); `T` does nothing |
-| `Esc` | close find bar / cancel pending keys / clear selection |
+| `Esc` | close find bar (clears the highlights) / cancel pending keys / clear selection |
 
 - Counts: digits before a motion repeat it (`5j`, `3]]`). `0` alone is not a
   motion (it starts nothing); max count 999. A pending count or `g`/`[`/`]`
@@ -252,7 +255,8 @@ string = "#a3be8c"
   Only the left button selects text.
 - Find: an inline equation is one unmatchable character; a hard line break is
   `\n`; matches never span paragraphs, table cells or code lines. A new query
-  starts at the first match in/below the top visible block. Current match:
+  (Ctrl+F) starts at the first match in/below the top visible block; with `/` at the first match
+  at or after the view position where `/` was pressed (§7). Current match:
   `find_current` fill + 1 px `ui.accent` outline.
 - Copy button copies the block text without trailing newlines.
 - Theme picker: sorted by `name`, showing `display_name`.
@@ -288,18 +292,45 @@ highlighted (`Action::ThemePicker` in `navigation.cpp`; the dropdown itself is `
 
 - `Ctrl+F` or `/` opens a find bar at the top of the document view (below the
   toolbar): a text field, a match counter `3/17` (or `no matches`), ↑ / ↓
-  buttons, and a close button. `Enter` = next, `Shift+Enter` = previous,
-  `Esc` = close (and clear highlights). `n` / `N` (vim keys) work whenever a
-  query exists and no text field has focus.
+  buttons, and a close button. `n` / `N` (vim keys) work whenever a
+  query exists and no text field has focus. How the bar was opened decides what Enter and Esc do:
+  - **Opened with Ctrl+F (browser style)**: `Enter` = next match, `Shift+Enter` = previous, the
+    field keeps focus; `Esc` closes the bar and clears the highlights.
+  - **Opened with `/` (vim style)**: the search starts at the view position where `/` was
+    pressed (the first match at or after the top of the view, wrapping to the first match of the
+    document; not the position the view has scrolled to while typing). `Enter` runs the search
+    now and **gives the keys back to the document**: the field loses focus, the query and the
+    highlights stay, the current match is visible. Then `n` / `N` step through the matches (and
+    all other vim keys work). `Esc` (in the document, or still in the field) does one thing,
+    closes the bar and clears the highlights (§6b order: pending keys, autoscroll, find bar,
+    selection). `/` again reopens the bar (after Esc) with the previous query back in the field,
+    or (bar still open) puts the keys in the field again; in both cases the whole text is
+    selected, so typing replaces it, and the next Enter searches again from the view position
+    of that `/`. A `/` typed to open the bar is not inserted into the field.
+  - Ctrl+F while the field has focus keeps (or makes) the bar browser style; `*` / `#` (§28) open the bar
+    with the keys on the document and no vim mode (Enter in the field = next match).
 - Matching: plain substring over the document's text runs (the selection
   model's runs: paragraphs, headings, list items, table cells, code lines).
   **Smartcase**: case-insensitive unless the query contains an uppercase
   letter. Math is not searched (its runs are atomic).
 - All matches get a `find_match` background, the current one `find_current`;
   the view scrolls so the current match is visible (centred if it was off
-  screen). Search updates as you type.
+  screen). Search updates as you type, **debounced**: the search runs 150 ms after the last edit
+  of the field (the counter shows `…` meanwhile), at once on Enter, at once when the query
+  becomes empty; script mode never waits.
 - Matches must be found in off-screen blocks too (search the document text,
   not only what was painted this frame).
+- **Cost**: the searchable text (the groups of select.h: each group's characters, their selection
+  positions, and each run's line box) is **built once per layout** (document version, column width, font
+  size, columns / styles; `FindIndex` in find.h, kept in the tab's find state and dropped when no query
+  needs it), not per keystroke; a search is then only a substring search over the prepared (case-folded)
+  group texts. The editor-search highlight (§17) uses the same text. (Developer switch for measuring:
+  a file `find_legacy` in the home folder, or the environment variable `CALLIGRUS_FIND_LEGACY`, prepares the text
+  again at every search; timings are logged with `CALLIGRUS_TRACE=1`, on Android with tag `calligrus`.)
+- Tests: `find-vim.mdscript` (visual: `/`, `fox`, Enter, `n`, `n n`, `N`, Esc, `/` and `dog` replacing the
+  selected query), using the script command `expect-find closed | field|doc MATCHES CURRENT` (the bar
+  is closed / open with the keys in the field / open with the keys on the document, and the counter) to check
+  the focus; `find.mdscript` covers Ctrl+F.
 
 ## 8. Fonts: embedded defaults + custom prose/mono
 
@@ -533,6 +564,7 @@ output every time.
   | `export FILE` | export the slides as a PDF to FILE (relative to the output folder, like `shot`) as the PDF button does, without the dialog, and wait for it (fails after 120 s; §27; after an `editor` `open`: the editor's text) |
   | `echo TEXT` | print to stdout |
   | `expect-title TEXT` | fail if the window title differs |
+  | `expect-find closed` / `expect-find field\|doc MATCHES CURRENT` | fail unless the find bar is closed / open with the keys in its field / open with the keys on the document, with that many matches and that (1-based, 0 = none) current one (§7) |
   | `quit` | exit 0 (also implied at end of file) |
   - A `keys` token that is a symbol without a key of its own (e.g. `*`, `#`) sends only its
     character (no key press).
@@ -1113,6 +1145,19 @@ renderer: a slide is a range of top-level blocks drawn alone, scaled to the wind
 
 ## 27. Fonts, column width, copy LaTeX, zoom
 
+- **Cache invalidation rule** (code ligatures, shaped prose, drawn glyph pictures): everything that depends on the loaded
+  fonts is keyed by, or dropped with, the font generation. `shaping::set_font` and `prose_shaping::set_chains` (both called
+  by every `load_fonts`) clear their caches and bump `generation()`; `shaped_draw` compares the two generations on every
+  glyph and drops its FreeType faces, glyph pictures and textures when either changed; `text_capture` does the same for
+  the PDF's fonts. A new cache of fonts' output must do likewise, or be cleared in `load_fonts`; the document's layout
+  caches are reset by main.cpp right after an atlas rebuild (`cache.key = 0`).
+- **Glyphs come from the right size** (ImGui's FreeType loader): ImGui keeps one "baked" font per size and its FreeType
+  loader skips selecting a baked's `FT_Size` when it believes that baked is the one selected last, remembering it by
+  address. That memory can go stale (bakeds are discarded and their pool moves); glyphs were then loaded at another
+  baked's size, and code came out with wrong advances and overlapping or wrong glyphs (seen with the system-font search
+  on, which looks characters up at 16 px between frames; fixture `code-sysfallback`). `load_glyph_with_curve` (fonts.cpp)
+  therefore selects the baked's `FT_Size` itself before every glyph. Dev switch `CALLIGRUS_FT_LEGACY=1` (Android: file
+  `ft_legacy` in the app home) leaves the loader's own check alone, to see the old behaviour.
 - **Font fallback order**: prose / UI: the face,
   Ubuntu-Light, Noto Emoji, emoji-icon-font, Cascadia Code (box drawing), Hack (symbols Cascadia lacks: ⇒ ⇔ ∀ ∃), Noto Sans Symbols 2 (✗ ✘ ☒..., below); code: the face,
   Cascadia Code (when the face is a custom one), Hack, Ubuntu-Light, the two emoji fonts, Noto Sans Symbols 2. A character no font has is drawn as
@@ -1310,11 +1355,40 @@ installed system fonts fill the gaps, after the bundled chain.
   `FontFiles::system` is merged last into every face by `load_fonts`, and the atlas is rebuilt
   the way a `[fonts]` change does it. The check runs again whenever the document or the chains
   change; the same fonts are never added twice, so it ends.
+- **Fonts and caches** (§27 rule): when the atlas is rebuilt for new system fonts, the shaping and glyph caches are
+  dropped with it (their generations change); the system-font search itself only reads the fonts' coverage and, to find
+  out what is missing, looks characters up in the atlas at 16 px, which must not disturb later glyphs (§27, fixture
+  `code-sysfallback`: the page must look the same with `system_fallback` on and off when nothing is missing).
+- **The saved font index** (so the scan happens once per installation, not at every start): the index of §8a also
+  keeps, for every face, the characters it has (the ranges of code points its Unicode `cmap` subtables map to a
+  glyph, formats 4, 6, 12 and 13) and whether it is a colour font. It is saved as a text file,
+  `<state folder>/calligrus/fontindex.cache` (`$XDG_STATE_HOME`, else `~/.local/state`; on Android the app's files
+  folder; on Windows `%LOCALAPPDATA%`), one record per font file keyed by its path, size and modification time. At
+  start-up the folders are walked (file names and stat only), a file whose key is in the saved index is taken from
+  it, only new or changed files are opened, and the file is rewritten (after the index is already usable) when
+  anything changed or a font disappeared. A damaged file is ignored. Choosing fonts for missing characters then
+  reads no font file at all: the candidates' coverage comes from the index; a candidate the index does not know is
+  read from its file as before.
+- **Never wait for a font**: the document is shown at once. While a search for fonts is pending (the check has not
+  run yet for this document, the font index is still being read, or a search for characters not tried before is
+  under way) characters no font has are drawn as **blank space**, never as `◻` and never as a blank screen; their
+  width in the layout is the `◻`'s until the font arrives. When the search is done, the chosen font files are read
+  on a worker thread (the choice and the read both happen off the UI thread; Android's `/system/fonts` Noto CJK
+  files are many MB), the UI thread hands them to the atlas (a file already read for the previous atlas is not read
+  again), the text is laid out again and drawn in the same frame. Characters no installed font has are tried once per
+  session; once the search is over they show as `◻` as before. Script mode (§14) has no blanking and no waiting
+  frames: it waits for the searches to finish before a screenshot, so a shot never shows the in-between state; with
+  `system_fallback = false` nothing is blanked.
+- **Timing log**: with the environment variable `CALLIGRUS_TRACE` set (Android: always, tag `calligrus`) the stages
+  are logged with milliseconds: the font index (walk, saved index loaded, files read, built), the check of the
+  document's characters, the choice and the file reads, the first frame, and the atlas rebuild with the frame that
+  lays the text out again.
 - **Config**: `system_fallback = true` (default); `false` turns it off. Settings: a checkbox
   "Use system fonts for missing characters".
 - **Shaping**: code text is shaped one-to-one (§27 ligatures) and complex-script prose as in §32.
 - **Tests**: unit tests of the choice on made-up faces and coverage (greedy order, ties, limit,
-  colour fonts skipped); the coverage check on the bundled fonts (e.g. "a" covered, U+0A97 not);
+  colour fonts skipped); the character ranges of a cmap against asking it code by code; the saved index (written,
+  read again for an unchanged file, a changed file read again, a damaged file ignored); the coverage check on the bundled fonts (e.g. "a" covered, U+0A97 not);
   the visual suite unchanged (system fonts differ per machine, so its `config.toml` sets
   `system_fallback = false`; its documents have no characters that need them, except the symbols
   fixture, which has a few no bundled font covers).
@@ -1536,3 +1610,140 @@ buffer the editor has focused).
 - **Implementation**: `struct Tab` = DocState + FindState + SlideState + History in `tabs`; the frame loop keeps
   working on the variables `st` / `find` / `slides` / `history` that many lambdas hold by reference, and
   switching SWAPS them with the chosen tab's, `tabs[active]` being an empty stand-in.
+
+
+## 35. Android
+
+The Android app (`io.github.thekaossphere.calligrus`, label "Calligrus", minSdk 26, target 36; arm64-v8a for tablets, x86_64
+for the emulator) runs the same document, layout and render code as the desktop app: `main.cpp` is compiled for
+both, against a small window layer (`src/android/window_android.*`: the part of GLFW it uses, over GameActivity,
+EGL and OpenGL ES 3; the ImGui OpenGL backend runs with `#version 300 es`). Anything not listed here behaves as in the
+sections above. Build: BUILDING.md. Desktop behaviour is unchanged (the visual suite is the guard).
+
+- **Scrolling (finger)**: platform-free `touch.h` / `touch.cpp` (console test `calligrus-touch-test`; times are
+  seconds on any steady clock). The physics follow Android's own (the Android Open Source Project, Apache
+  License 2.0: `android.view.ViewConfiguration`, `android.widget.OverScroller` / `SplineOverScroller`,
+  `android.view.VelocityTracker`'s default LSQ2 strategy), with the screen density d (dpi / 160) from
+  `AConfiguration_getDensity`. Fingers that start on the document view:
+  - A press that stays within the slop (8 dp) and ends within 0.35 s is a **tap**: a click at the press point (links,
+    pictures, the right word on a double tap). Nothing else is a tap.
+  - **Press feedback**: a widget (toolbar, menu) shows its pressed look only after the finger has rested on it 90 ms,
+    so a press that turns into a scroll never flashes a pressed button. Letting go on it clicks it; a drag or a
+    press over 0.35 s lets go elsewhere (no click).
+  - A drag moves the content **1:1** with the finger; when the slop (8 dp, vertical) is crossed the slop is
+    *subtracted* (as `ScrollView` does), so the content starts from rest, with no jump. No easing. Moving back moves
+    back.
+  - Lifting while moving starts a **fling**. Speed = the **LSQ2** velocity of the samples of the last 100 ms (at most
+    20): `VelocityTracker`'s default strategy for a finger's X and Y (frameworks/native `VelocityTracker`,
+    `DEFAULT_STRATEGY = LSQ2`; the impulse strategy is what it uses for the other axes, such as the scroll wheel):
+    the samples are fitted, newest first, with a parabola in the time before the newest sample by least squares, and
+    the speed is its slope at the newest sample (a line with two samples, no speed with one or with a degenerate fit).
+    A pause of 40 ms or more between samples forgets the earlier ones (`ASSUME_POINTER_STOPPED_TIME`), two samples with
+    the same time are one (the later wins), and a finger that rested 40 ms or more before lifting has no momentum.
+    **Every sample counts**: a MotionEvent that arrives with older samples batched in (its history, each with its own
+    time) feeds all of them to the tracker in time order, then its current sample; times are the events' own times,
+    never the time the app received them. (The impulse value of the same samples is kept in the debug log.)
+    Below 50 dp/s: no fling; capped at 8000 dp/s.
+    The fling is `SplineOverScroller`'s: with `ppi = 160 d`, `coeff = 9.80665 * 39.37 * ppi * 0.84`,
+    `l = ln(0.35 |v| / (0.015 coeff))` and `DECELERATION_RATE = ln 0.78 / ln 0.9`, the distance is
+    `0.015 coeff exp(DECELERATION_RATE / (DECELERATION_RATE - 1) l)` and the duration
+    `floor(1000 exp(l / (DECELERATION_RATE - 1)))` ms, travelled along the spline position table of
+    `SplineOverScroller` (100 samples, computed as it does). E.g. at d = 2.625: 1000 px/s goes 95.5 px in 272 ms,
+    4000 px/s 1059.9 px in 757 ms. Time based (the same at 30 and 60 fps). A fling **stops at the ends** of the
+    document (no bounce). A touch that lands on a running fling stops it at once and is not a tap.
+  - **Pinch** (two fingers): the ratio of the finger distance is the zoom factor (zoom 0.5 to 3.0, spec 1; rounded to
+    0.01, saved like the zoom keys do). It zooms the **document only** (the toolbar, outline and widgets keep their
+    size: they use the screen density, the document the density times the zoom), **around the fingers**: the
+    content under them stays under them.
+    *While the fingers are down* nothing is laid out again and the font atlas is not touched: the document, as laid
+    out, is drawn into the same draw list and its vertices and clip rectangles are then scaled by the pinch factor
+    about the fingers' starting point and moved with their centre (blocks are drawn for the screen range that maps
+    onto the view, so zooming out shows more). It is a little blurry or pixelated in between, by design.
+    *When the fingers lift* the document is laid out once at the final zoom, and the block that was under the
+    fingers is put back under them (`zoom_anchor` plus the offset of the fingers from the top of the view); then
+    the picture is sharp. Lifting one finger of a pinch continues as a drag from where that finger is, with no fling
+    and no tap. A third finger is ignored. (A developer switch, a file `pinch_legacy` in the home folder, makes a pinch
+    lay out at every step, to measure the difference; the log, tag `calligrus`, prints the cost per frame.)
+  - Fingers that start elsewhere (toolbar, outline, a popup, the settings window) belong to ImGui: a tap clicks the
+    widget under it; a drag scrolls the **window under the finger** (a popup, the theme list, the recent files, the overflow
+    menu, the outline, the settings panel, a child window: the front-most window at the touch-down, or its nearest scrollable
+    parent child window) by writing its scroll offset: 1:1 after the slop, the same fling physics as the document, clamped at
+    the ends (a fling stops there). The pointer is **not** moved while the finger drags: no item is hovered or highlighted on
+    the way (the theme picker's live preview follows the keys only). A press shows only after 90 ms of rest and is released
+    off the item (no click) as soon as the finger moves past the slop; only a tap (up within the slop and 350 ms) clicks.
+    **Wide blocks**: a code block or display formula wider than the column scrolls sideways (`RenderResult::hblocks`, offset in
+    `RenderCache::code`). A formula with a `	ag` keeps at least 1 em between formula and tag (a centred formula moves left to
+    keep it); when formula + gap + tag is wider than the column the formula and its tag are one wide line that scrolls (Shift +
+    wheel or a sideways wheel on the desktop, no bar there; a thin bar shows for 1.2 s after any scroll, as under code). A finger
+    that goes down on such a block feeds both the page tracker and a second tracker with x as y (same slop, LSQ2, fling); the
+    axis that crosses the slop first is kept (both in one event: the larger of |dx|, |dy|), the other is cancelled, a second finger
+    cancels the block scroll; a tap on the block is the document's tap. Offsets clamp to 0..overflow and a fling stops there.
+    Two fingers on a list do nothing (no document zoom). While the settings window is open a **sideways** drag (past the
+    slop with no vertical drag yet) is the mouse from the touch-down point, so sliders can be dragged; a vertical drag scrolls.
+  - A hardware keyboard works (letters, arrows, Page Up / Down, Space, Ctrl chords, so the vim keys and Ctrl+F work).
+    The soft keyboard is not wired up yet: the find bar and text fields need a hardware keyboard.
+- **Mouse and tooltips**: input from a real mouse or trackpad (`AINPUT_SOURCE_MOUSE`, or tool type mouse) is not a
+  finger: it goes to ImGui as the mouse (`ImGuiMouseSource_Mouse`: hover, the buttons, the wheel and hover moves), and
+  the document scrolls with its wheel as on the desktop (a notch = 40 pt x the document scale, as `kWheelNotchPoints`; fractional
+  values of a trackpad or a high-resolution wheel scroll proportionally; the horizontal axis, or Shift + the wheel, scrolls a
+  code block sideways, as in render.cpp). GameActivity copies only the X and Y axes of a pointer unless asked, so the
+  wheel axes (`AMOTION_EVENT_AXIS_VSCROLL`, `AXIS_HSCROLL`) are enabled at start-up. Fingers feed ImGui with the touch-screen source
+  (`ImGuiMouseSource_TouchScreen`) before every mouse event they make. **Tooltips** (toolbar buttons, tabs, link
+  addresses) show only while the current mouse source is the mouse, so a tap leaves no tooltip behind and a mouse on
+  a tablet still has them and the hover looks. (The desktop's mouse is always the mouse: no change there.)
+- **Touch debug log**: a file named `touch_log` in the app's home folder (the files folder:
+  `adb shell run-as io.github.thekaossphere.calligrus touch files/touch_log`; delete it to stop; looked at at every
+  press) makes the app log, tag `calligrus`, every touch sample (`touch move id= x= y= t=<ms> hist=<0|1> raw=<the
+  event's raw time>`; `hist=1` for a batched history sample) and, at every lift, `touch lift: samples= lsq2= impulse=
+  clamped= stale= fling=` in px/s: what a real device sends and what the velocity tracker made of it.
+- **Window**: edge to edge; the app draws inside the system bars and the camera cut-out (insets are read every frame;
+  the status-bar strip is painted in the panel colour and its icons follow the theme: light icons on dark themes).
+  The screen density (dpi / 160) is the DPI scale of spec 1: the toolbar and text are in dp. Widgets are
+  finger-sized (larger padding and scroll bars). Rotation and split screen only resize the window.
+  While the app is in the background the GL context and all textures are kept; the event loop sleeps.
+- **Toolbar**: Open, the recent-files arrow, Reload, Outline, A- / A+, the theme picker, Settings and the file name.
+  Left out: Slides (slides mode, tabs and the presenter need keys and a second window), PDF export (a child process
+  and a save dialog), editor mode (`--editor`), `--register`.
+  **Overflow menu (shared code)**: when the buttons do not fit the width, they move one by one into a menu behind a
+  three-dot button at the right end of the bar, so the bar never runs off the screen. Priority, the last to go first
+  in the list: Open, Outline, A- / A+, Settings, theme, Reload, recent files (then, on the desktop, Slides and PDF), so a phone
+  keeps Open, Outline, A- / A+, the gear and the three dots.
+  The menu lists the moved items by name ("Theme..." opens the theme list below the button, "Recent files..." the
+  recent list, "Smaller text" / "Larger text" stay open for repeated taps). **The file name**: with the three-dot button (a phone upright) the bar has **no file name**; the menu starts with it instead,
+  as a greyed line (not an item), shortened in the middle with `…` (both ends kept, so the extension stays:
+  `JW-MWM_2…10-29.md`) when it is longer than 260 pt, followed by a rule. Without the button (a tablet, a phone sideways, any
+  desktop window) the name gets the room left before the right edge of the bar: shortened in the middle the same way
+  (Android; the desktop draws the whole name and the window edge cuts it, as the references show), and left out when
+  there is room for fewer than 3 characters. The desktop has the three-dot button only below 400 px of toolbar width, so its
+  usual window sizes (the visual suite's included) are unchanged. On Android the button comes at any width where the buttons do not fit (a landscape tablet shows everything). On a
+  screen narrower than 600 dp (a phone upright) the outline panel starts hidden.
+- **Opening files**: the Open button starts Android's document picker (`ACTION_OPEN_DOCUMENT`, `text/*`,
+  `application/octet-stream`, any name: `.md`, `.markdown`, `.org`). The app is also offered by "Open with" (`VIEW` with
+  Markdown / Org / plain-text types, or a path ending in `.md`, `.markdown`, `.org`) and by "Share" (`SEND`, a file
+  or plain text, shown as `shared.md`). Java reads the stream (up to 64 MB) with `ContentResolver` and hands the name
+  and bytes to native code, which stores them as `<files dir>/opened/<hash of the bytes>/<name>` (the 40 newest are kept)
+  and opens that file like a dropped one; the name's extension picks Markdown or Org (spec 25), as on the desktop.
+  Differences: **relative pictures and links next to the document do not resolve** (only the copy is local;
+  absolute `http` pictures are not fetched either, as on the desktop), and a changed original is not reloaded.
+  Links to `http`, `https` and `mailto` open in the system's app; opening a file link to another local file works only
+  inside the copy's folder.
+- **Folders**: `HOME` and the XDG folders point into the app's files dir (`config/calligrus/config.toml`, `state/`,
+  themes), so the config, themes and state work as on Linux; `TMPDIR` is the cache dir. The system theme (night mode) is
+  read from the configuration.
+- **Fonts**: the bundled fonts are inside the library as on the desktop. The system-font fallback (spec 30) scans
+  `/system/fonts` (and `/product/fonts`, `/system_ext/fonts`) for characters no bundled font has, so Devanagari,
+  Gujarati and the like use the device's Noto fonts.
+- **Power** (an idle app costs nothing): the loop sleeps in `ALooper_pollOnce` with no polling. GameActivity's glue writes a
+  command to the looper's pipe for every touch, key and text event, so input wakes the loop at once (the old 16 ms
+  polling is gone); jobs wake it with `glfwPostEmptyEvent`. The wait's timeout is the next real deadline only: the
+  debounced config write (300 ms), the scrollbar hiding, the toast ending, a find search waiting for the typing to stop,
+  and, after input, a 200 ms step for one second (hover delays, widget fades) and a 500 ms step while a text field has the
+  focus (caret). With none of these there is no timer at all. A wake that is only the config timer writes the file and
+  neither draws nor swaps buffers; frames are also skipped while nothing moves (no animation, no pending scroll, anchor,
+  layout or font job). There are no file watchers on Android (opened files are local copies): the night mode is read at
+  every wake. The config and the state file are written at once when the app goes to the background (`APP_CMD_PAUSE`,
+  `STOP`, `SAVE_STATE`, `TERM_WINDOW`), since the process can be killed from then on. ImGui's clock follows real time
+  (the frame delta is capped at 5 s, not 0.5 s). Dev switches in the app home: `power_legacy` (the old loop), `power_log`
+  (a log line per wait, frame and skipped wake, tag `calligrus`).
+- **Later work**: the soft keyboard, slides and the presenter, PDF export, text selection by long press and handles,
+  the outline as a drawer on narrow screens, relative pictures (copy the document's folder, or read it through the storage framework), a share-out, a Play build.
