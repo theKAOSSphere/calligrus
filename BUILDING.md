@@ -84,6 +84,11 @@ the tree): `CALLIGRUS_RELEASE_KEYSTORE` (path), `CALLIGRUS_RELEASE_STORE_PASSWOR
 `CALLIGRUS_RELEASE_KEY_ALIAS` (default `calligrus`) and `CALLIGRUS_RELEASE_KEY_PASSWORD` (default: the store password).
 Otherwise the APK stays unsigned.
 
+GitHub Actions does this with two repository secrets: `CALLIGRUS_KEYSTORE_B64` (the keystore, base64) and
+`CALLIGRUS_KEYSTORE_PASSWORD` (store and key password; the alias is `calligrus`). The CI `android` job builds a signed
+APK when they exist (artifact `calligrus-android`) and an unsigned one otherwise (fork pull requests). The release
+workflow requires them and attaches `calligrus-<tag>-android-arm64.apk` to the draft release.
+
 ## Tests
 
 Every `calligrus-*-test` executable in the build folder is a console test with exit code 0 on success (no window).

@@ -160,7 +160,8 @@ jobs:
             spec/tests/visual/out
           if-no-files-found: ignore
 
-  # The unsigned release APK (arm64-v8a). Build only: no emulator, no tests.
+  # The release APK (arm64-v8a), signed when the repository secrets are available (not for pull requests from
+  # forks, which get none: those build the unsigned APK). Build only: no emulator, no tests.
   android:
     runs-on: ubuntu-latest
     env:
@@ -173,6 +174,24 @@ jobs:
           distribution: temurin
           java-version: "17"
           cache: gradle
+
+      # `secrets` cannot be used in a step's `if:`, so look at it through a step-level env var. Nothing here
+      # prints a value, and no step in this job uses `set -x`.
+      - name: Decode the signing keystore (when the secrets exist)
+        id: sign
+        env:
+          HAS_KEY: ${{ secrets.CALLIGRUS_KEYSTORE_B64 != '' }}
+          KEYSTORE_B64: ${{ secrets.CALLIGRUS_KEYSTORE_B64 }}
+        run: |
+          if [ "$HAS_KEY" = "true" ]; then
+            umask 077
+            printf '%s' "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/calligrus-release.jks"
+            chmod 600 "$RUNNER_TEMP/calligrus-release.jks"
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No signing secrets in this run (a fork pull request?): building the unsigned APK."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+          fi
 
       # Restore here, save right after the build (below), as in the other jobs.
       - name: Restore vcpkg binary packages
@@ -209,9 +228,20 @@ jobs:
           "$HOME/vcpkg/bootstrap-vcpkg.sh" -disableMetrics
           echo "VCPKG_ROOT=$HOME/vcpkg" >> "$GITHUB_ENV"
 
-      # The overlay triplets (cmake/triplets) are picked by CMakeLists.txt from the ABI; no secrets, so the
-      # release APK stays unsigned. `sh gradlew`: the file is not stored executable.
+      # The overlay triplets (cmake/triplets) are picked by CMakeLists.txt from the ABI. The signing variables
+      # exist for this one step only (not in GITHUB_ENV). `sh gradlew`: the file is not stored executable.
+      - name: Build (Release, arm64-v8a, signed)
+        if: steps.sign.outputs.signed == 'true'
+        working-directory: android
+        env:
+          CALLIGRUS_RELEASE_KEYSTORE: ${{ runner.temp }}/calligrus-release.jks
+          CALLIGRUS_RELEASE_STORE_PASSWORD: ${{ secrets.CALLIGRUS_KEYSTORE_PASSWORD }}
+          CALLIGRUS_RELEASE_KEY_ALIAS: calligrus
+          CALLIGRUS_RELEASE_KEY_PASSWORD: ${{ secrets.CALLIGRUS_KEYSTORE_PASSWORD }}
+        run: sh gradlew assembleRelease -PcalligrusAbis=arm64-v8a
+
       - name: Build (Release, arm64-v8a, unsigned)
+        if: steps.sign.outputs.signed != 'true'
         working-directory: android
         run: sh gradlew assembleRelease -PcalligrusAbis=arm64-v8a
 
@@ -225,13 +255,37 @@ jobs:
       - name: Name the APK
         run: |
           mkdir -p dist
-          cp android/app/build/outputs/apk/release/app-release-unsigned.apk "dist/calligrus-${GITHUB_SHA::7}-unsigned.apk"
+          if [ "${{ steps.sign.outputs.signed }}" = "true" ]; then
+            cp android/app/build/outputs/apk/release/app-release.apk "dist/calligrus-${GITHUB_SHA::7}.apk"
+          else
+            cp android/app/build/outputs/apk/release/app-release-unsigned.apk "dist/calligrus-${GITHUB_SHA::7}-unsigned.apk"
+          fi
           ls -l dist
 
+      - name: Verify the signature
+        if: steps.sign.outputs.signed == 'true'
+        run: |
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs dist/*.apk | tee "$RUNNER_TEMP/certs.txt"
+          grep -q 'certificate DN' "$RUNNER_TEMP/certs.txt"
+
+      - name: Upload the signed APK
+        if: steps.sign.outputs.signed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: calligrus-android
+          path: dist/*.apk
+          retention-days: 14
+          if-no-files-found: error
+
       - name: Upload the unsigned APK
+        if: steps.sign.outputs.signed != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: calligrus-android-unsigned
           path: dist/*.apk
           retention-days: 14
           if-no-files-found: error
+
+      - name: Delete the keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/calligrus-release.jks"
