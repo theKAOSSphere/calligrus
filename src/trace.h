@@ -1,11 +1,14 @@
 // Timing and debug lines. On Android they go to the system log (tag "calligrus"); elsewhere to stderr, and only when
-// the environment variable CALLIGRUS_TRACE is set (to anything). Used for the system-font stages (spec 30).
+// the environment variable CALLIGRUS_TRACE is set: to a file path (contains a slash or backslash) to append them to that
+// file instead, which a Windows GUI launch needs (it has no stderr). Used for the system-font stages (spec 30) and the
+// display-scale changes.
 #pragma once
 
 #include <chrono>
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 
 #ifdef __ANDROID__
 #include <android/log.h>
@@ -46,7 +49,16 @@ inline void log(const char* fmt, ...) {
 #ifdef __ANDROID__
     __android_log_print(ANDROID_LOG_INFO, "calligrus", "%s", line);
 #else
-    std::fprintf(stderr, "[calligrus %9.1f ms] %s\n", now_ms(), line);
+    static FILE* const out = [] {
+#pragma warning(suppress : 4996)  // (read once, like enabled())
+        const char* v = std::getenv("CALLIGRUS_TRACE");
+        const bool path = v && (std::strchr(v, '/') || std::strchr(v, '\\'));
+#pragma warning(suppress : 4996)
+        FILE* f = path ? std::fopen(v, "a") : nullptr;
+        return f ? f : stderr;
+    }();
+    std::fprintf(out, "[calligrus %9.1f ms] %s\n", now_ms(), line);
+    std::fflush(out);
 #endif
 }
 

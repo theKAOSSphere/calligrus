@@ -29,7 +29,7 @@ Everything here was made using the Claude family of models: `claude-opus-5-5` fo
 - **15 themes**, including Dracula, Nord, Gruvbox, Solarized, Catppuccin, Tokyo Night, GitHub and Bearded Vivid Black. Press `t` to preview them live. You can also add your own.
 - **Slides**: present any document with `F5`, with a presenter window, speaker notes and a clock.
 - **PDF export**: pages (A4 or Letter) with real, selectable and searchable text, or slide decks.
-- **Editor integration**: Emacs and Neovim show the buffer you're editing as you type, scroll along with your cursor, and Ctrl+click in the preview jumps back to that line.
+- **Editor integration**: Emacs, Neovim and Vim show the buffer you're editing as you type, scroll along with your cursor, and Ctrl+click in the preview jumps back to that line.
 - **Complex scripts**: Devanagari, Gujarati and other scripts are shaped properly, using system fonts for characters the bundled fonts don't have.
 - **One file**: a single executable with fonts, themes and grammars built in. No runtime to install.
 
@@ -60,8 +60,8 @@ The first screen is a short tour of the keys. The most useful ones:
 | `t` | theme picker |
 | `H` / `L`, `Alt+←` / `Alt+→` | back / forward |
 | `m` + letter, `'` + letter | set a mark, jump to it |
-| `Ctrl+O`, `Ctrl+Shift+O` | open a file, recent files |
-| `Ctrl+T`, `Ctrl+Tab`, `Ctrl+W` | new tab, next tab, close tab |
+| `Ctrl+O`, `Ctrl+Shift+O` | open a file in a new tab, recent files |
+| `Ctrl+T`, `Ctrl+Tab`, `Ctrl+W` | open a file in a new tab (same as `Ctrl+O`), next tab, close tab |
 | `F5` | slides on / off |
 
 A common shell alias is `calli`:
@@ -105,7 +105,7 @@ A folder that already exists in one of those places is always used. Your own the
 (setq calligrus-exe "/path/to/calligrus")
 ```
 
-`M-x calligrus-toggle` in a Markdown or Org buffer opens the preview, and `M-x calligrus-stop` closes it. See [editors/emacs/README.md](editors/emacs/README.md) for the options.
+`M-x calligrus-toggle` in a Markdown or Org buffer opens the preview, and `M-x calligrus-stop` closes it. See [editors/emacs/README.org](editors/emacs/README.org) for the options.
 
 ### Neovim
 
@@ -115,6 +115,15 @@ require("calligrus").setup({ exe = "/path/to/calligrus" })
 ```
 
 `:CalligrusToggle` opens the preview for the current buffer. See [editors/nvim/README.md](editors/nvim/README.md) for the options.
+
+### Vim
+
+```vim
+set runtimepath+=/path/to/calligrus/editors/vim
+let g:calligrus_exe = '/path/to/calligrus'
+```
+
+`:CalligrusToggle` opens the preview for the current buffer. See [editors/vim/README.md](editors/vim/README.md) for the options.
 
 ## Documentation
 

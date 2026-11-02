@@ -6,9 +6,10 @@ on:
     tags:
       - "v*"
 
+# The libraries are downloaded by CMake (FetchContent, cmake/deps.cmake); the archives are kept in this folder, which
+# actions/cache saves and restores.
 env:
-  VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-cache
-  VCPKG_DISABLE_METRICS: "1"
+  CALLIGRUS_DOWNLOAD_DIR: ${{ github.workspace }}/.deps-cache
 
 jobs:
   windows:
@@ -16,27 +17,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Cache vcpkg binary packages
+      - name: Cache downloaded libraries
         uses: actions/cache@v4
         with:
-          path: .vcpkg-cache
-          key: vcpkg-windows-${{ hashFiles('vcpkg.json') }}
-          restore-keys: vcpkg-windows-
+          path: .deps-cache
+          key: deps-windows-${{ hashFiles('cmake/deps.cmake') }}
+          restore-keys: deps-windows-
 
-      - name: Get vcpkg at the manifest baseline
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force .vcpkg-cache | Out-Null
-          $baseline = (Get-Content vcpkg.json -Raw | ConvertFrom-Json).'builtin-baseline'
-          $root = Join-Path $env:RUNNER_TEMP 'vcpkg'
-          git init $root
-          git -C $root remote add origin https://github.com/microsoft/vcpkg
-          git -C $root fetch --depth 1 origin $baseline
-          git -C $root checkout FETCH_HEAD
-          & "$root\bootstrap-vcpkg.bat" -disableMetrics
-          "VCPKG_ROOT=$root" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
-
-      - name: Build (Release, MSVC, x64-windows-static)
+      - name: Build (Release, MSVC, static)
         shell: pwsh
         run: .\build.ps1
 
@@ -72,29 +60,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Cache vcpkg binary packages
+      - name: Cache downloaded libraries
         uses: actions/cache@v4
         with:
-          path: .vcpkg-cache
-          key: vcpkg-linux-${{ hashFiles('vcpkg.json') }}
-          restore-keys: vcpkg-linux-
+          path: .deps-cache
+          key: deps-linux-${{ hashFiles('cmake/deps.cmake') }}
+          restore-keys: deps-linux-
 
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake ninja-build git curl zip unzip tar pkg-config autoconf autoconf-archive automake libtool \
+          sudo apt-get install -y build-essential cmake ninja-build pkg-config \
             libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl-dev \
-            libxkbcommon-dev libwayland-dev libxext-dev
-
-      - name: Get vcpkg at the manifest baseline
-        run: |
-          mkdir -p .vcpkg-cache
-          baseline=$(python3 -c "import json; print(json.load(open('vcpkg.json'))['builtin-baseline'])")
-          git init "$HOME/vcpkg"
-          git -C "$HOME/vcpkg" remote add origin https://github.com/microsoft/vcpkg
-          git -C "$HOME/vcpkg" fetch --depth 1 origin "$baseline"
-          git -C "$HOME/vcpkg" checkout FETCH_HEAD
-          echo "VCPKG_ROOT=$HOME/vcpkg" >> "$GITHUB_ENV"
+            libxkbcommon-dev libwayland-dev wayland-protocols libxext-dev
 
       - name: Build (Release)
         run: bash build.sh
@@ -146,13 +124,13 @@ jobs:
           cache: gradle
 
       # Restore here, save right after the build (below): same as the CI job.
-      - name: Restore vcpkg binary packages
-        id: vcpkg-cache
+      - name: Restore downloaded libraries
+        id: deps-cache
         uses: actions/cache/restore@v4
         with:
-          path: .vcpkg-cache
-          key: vcpkg-android-${{ hashFiles('vcpkg.json', 'cmake/triplets/*.cmake') }}
-          restore-keys: vcpkg-android-
+          path: .deps-cache
+          key: deps-android-${{ hashFiles('cmake/deps.cmake') }}
+          restore-keys: deps-android-
 
       - name: Install Android SDK packages
         run: |
@@ -162,22 +140,6 @@ jobs:
           "$sdkmanager" "platforms;android-36" "build-tools;36.0.0" "cmake;3.22.1" "ndk;$ANDROID_NDK_VERSION"
           echo "ANDROID_HOME=$sdk" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_HOME=$sdk/ndk/$ANDROID_NDK_VERSION" >> "$GITHUB_ENV"
-
-      - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ninja-build git curl zip unzip tar pkg-config autoconf autoconf-archive automake libtool
-
-      - name: Get vcpkg at the manifest baseline
-        run: |
-          mkdir -p .vcpkg-cache
-          baseline=$(python3 -c "import json; print(json.load(open('vcpkg.json'))['builtin-baseline'])")
-          git init "$HOME/vcpkg"
-          git -C "$HOME/vcpkg" remote add origin https://github.com/microsoft/vcpkg
-          git -C "$HOME/vcpkg" fetch --depth 1 origin "$baseline"
-          git -C "$HOME/vcpkg" checkout FETCH_HEAD
-          "$HOME/vcpkg/bootstrap-vcpkg.sh" -disableMetrics
-          echo "VCPKG_ROOT=$HOME/vcpkg" >> "$GITHUB_ENV"
 
       # No `set -x` in the steps that touch the secrets.
       - name: Decode the signing keystore
@@ -198,12 +160,12 @@ jobs:
           CALLIGRUS_RELEASE_KEY_PASSWORD: ${{ secrets.CALLIGRUS_KEYSTORE_PASSWORD }}
         run: sh gradlew assembleRelease -PcalligrusAbis=arm64-v8a
 
-      - name: Save vcpkg binary packages
-        if: always() && steps.vcpkg-cache.outputs.cache-hit != 'true'
+      - name: Save downloaded libraries
+        if: always() && steps.deps-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
-          path: .vcpkg-cache
-          key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}
+          path: .deps-cache
+          key: ${{ steps.deps-cache.outputs.cache-primary-key }}
 
       - name: Name and verify the APK
         run: |

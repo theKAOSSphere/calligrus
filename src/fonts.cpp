@@ -309,7 +309,7 @@ ImFont* add(const FontData& f, bool merge = false, float extra_scale = 1.0f, flo
 //   both: then the installed fonts (spec 30), and Latin Modern Math (CFF outlines) as the very last resort.
 // So "📂", "⟳", "☰", "🌙"... render.
 // Same fallback order and shrink factors as egui's defaults (epaint/src/text/fonts.rs).
-// (Emoji above U+FFFF need ImGui built with 32-bit ImWchar: vcpkg feature "wchar32".)
+// (Emoji above U+FFFF need ImGui built with 32-bit ImWchar: IMGUI_USE_WCHAR32, set in cmake/deps.cmake.)
 //
 // Merged fonts are sized like any ImGui font: so that THEIR ascent+descent
 // equals the size. That size was chosen for the main face (em ratio `f.em`),

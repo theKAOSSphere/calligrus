@@ -1,0 +1,9 @@
+size 900 700
+open callouts.md
+shot at1.png
+scale 1.5
+size 700 500
+shot at15.png
+scale 1.0
+size 900 700
+shot back1.png

@@ -4,11 +4,11 @@ Calligrus itself is licensed under the GNU General Public License, version 3 or 
 version (GPL-3.0-or-later, see `LICENSE`). It bundles or links the following. Everything below is either
 linked into the executable, embedded in it, or shipped in this repository.
 
-## C++ libraries (built with vcpkg, see `vcpkg.json`)
+## C++ libraries (downloaded and built by CMake, pinned in `cmake/deps.cmake`)
 
 | Library | Used for | Licence | Upstream |
 |---|---|---|---|
-| Dear ImGui 1.92 | the user interface | MIT | https://github.com/ocornut/imgui |
+| Dear ImGui 1.92.8 | the user interface | MIT | https://github.com/ocornut/imgui |
 | GLFW 3 | window, input, OpenGL context | Zlib | https://github.com/glfw/glfw |
 | md4c | Markdown parser | MIT | https://github.com/mity/md4c |
 | stb (`stb_image`, `stb_image_write`) | image decoding (PNG, JPEG, GIF, BMP), PNG output | MIT or public domain (your choice) | https://github.com/nothings/stb |
@@ -17,12 +17,9 @@ linked into the executable, embedded in it, or shipped in this repository.
 | zlib | Flate streams in PDF export | Zlib | https://github.com/madler/zlib |
 | HarfBuzz | text shaping, font subsetting for PDF export | "Old MIT" (MIT-style) | https://github.com/harfbuzz/harfbuzz |
 | FreeType | glyph rasterisation (through ImGui), code ligatures | FreeType Licence (FTL) or GPL-2.0-or-later; we use the FTL | https://freetype.org |
-| libpng | PNG support for FreeType | libpng licence (PNG Reference Library License version 2) | http://www.libpng.org/pub/png/libpng.html |
-| Brotli | WOFF2 / compressed font support for FreeType | MIT | https://github.com/google/brotli |
-| bzip2 | compressed font support for FreeType | bzip2 licence (BSD-style) | https://sourceware.org/bzip2/ |
 
-The licence texts are in each package's `share/<port>/copyright` file inside the vcpkg installation that built the
-executable. A build that links these statically (the Windows release does) contains their code.
+The licence texts are in each library's source archive (the `LICENSE` or `COPYING` file at its top). A build that links
+these statically (the releases do) contains their code.
 
 ## Ported code
 

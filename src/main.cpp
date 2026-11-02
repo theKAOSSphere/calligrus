@@ -202,6 +202,12 @@ static std::string display_path(const fs::path& p) {
 // ---------------------------------------------------------------------------
 
 static bool g_script_mode = false;
+// Open (Ctrl+O, the toolbar) puts the file in a new tab, like Ctrl+T (spec 34); Android has no tabs yet, so it replaces.
+#ifdef __ANDROID__
+constexpr bool kOpenInNewTab = false;
+#else
+constexpr bool kOpenInNewTab = true;
+#endif
 static bool g_editor = false;  // --editor: live preview driven by an editor on stdin (spec 15)
 static fs::path g_script_log;
 
@@ -903,7 +909,7 @@ static void draw_toolbar(DocState& st, UiState& ui, ConfigFile& conf, const Them
     };
     auto do_open = [&] {
         if (g_script_mode) script_log("open dialog suppressed in script mode");
-        else if (auto p = platform::open_file_dialog(native_window(window))) st.open_request = *p;
+        else if (auto p = platform::open_file_dialog(native_window(window))) st.open_request = *p, st.open_new_tab = kOpenInNewTab;
     };
     auto smaller = [&] {
         if (cfg.body_size > kBodySizeMin) {
@@ -1002,7 +1008,7 @@ static void draw_toolbar(DocState& st, UiState& ui, ConfigFile& conf, const Them
 
     // The file name, with whatever room is left (all of it on a window wide enough). With the "more" button (a phone) the
     // bar has no name: it is the first line of the menu instead (spec 35).
-    std::string label = st.path.empty() ? "built-in demo â open a file with Ctrl+O or drop one here" : display_path(st.path);
+    std::string label = st.path.empty() ? "built-in demo — open a file with Ctrl+O or drop one here" : display_path(st.path);
 #ifdef __ANDROID__  // (the app's own copy of the document sits in a long private path: show the name)
     label = st.path.empty() ? "built-in demo" : to_utf8(st.path.filename());
 #endif
@@ -2935,6 +2941,13 @@ static void install_input_callbacks(GLFWwindow* w) {
     glfwSetCharCallback(w, [](GLFWwindow*, unsigned) { g_input = true; });
     glfwSetWindowSizeCallback(w, [](GLFWwindow*, int, int) { g_input = true; });
     glfwSetWindowFocusCallback(w, [](GLFWwindow*, int) { g_input = true; });
+    // A display change (lock + Remote Desktop, a monitor moved or unplugged) changes the DPI scale and the framebuffer
+    // size, sometimes while the window is hidden: wake the loop so the frame reconciles them (see `monitor_scale`).
+#ifndef __ANDROID__  // (Android: a density change arrives as a configuration change, which wakes the loop by itself)
+    glfwSetWindowContentScaleCallback(w, [](GLFWwindow*, float, float) { g_input = true; });
+    glfwSetFramebufferSizeCallback(w, [](GLFWwindow*, int, int) { g_input = true; });
+#endif
+    glfwSetWindowRefreshCallback(w, [](GLFWwindow*) { g_input = true; });
     glfwSetDropCallback(w, [](GLFWwindow*, int n, const char** paths) {
         if (n > 0) g_dropped = paths[0];
         g_input = true;
@@ -3176,6 +3189,10 @@ int main() {
     float dpi = 1.0f;  // monitor DPI scale (1.5 on a 144-dpi screen)
     glfwGetWindowContentScale(window, &dpi, nullptr);
     if (g_script_mode) dpi = 1.0f;  // output must not depend on the monitor: the script's `scale` says otherwise
+    // The DPI scale the display reports NOW. Real mode: read from the window every frame (a lock + Remote Desktop session or a
+    // monitor change alters it with no other sign, and a callback can be missed while the window is hidden). Script mode: the
+    // script's `scale` sets it, so the same per-frame reconcile below runs in both.
+    float monitor_scale = dpi;
 
     // The installed-font index (spec 8a), for family names in [fonts]: scanned
     // on a background thread while the rest starts up. When it's done, wake the
@@ -4106,7 +4123,7 @@ int main() {
         auto to_path = [&](const std::string& t) { return script_dir / fs::path(std::u8string(t.begin(), t.end())); };
         switch (c.kind) {
             case Kind::Size: script_w = int(c.a), script_h = int(c.b); break;
-            case Kind::Scale: queue([&dpi, s = float(c.a)] { dpi = s; }, 1); break;
+            case Kind::Scale: queue([&monitor_scale, s = float(c.a)] { monitor_scale = s; }, 1); break;
             case Kind::Open: {
                 const fs::path file = to_path(c.text).lexically_normal();
                 std::error_code e;
@@ -4551,6 +4568,28 @@ int main() {
             for_waiting([](Tab& t) { t.st.cache.key = 0, t.slides.measured = 0; });
         }
         if (first_build) sys_search();
+        if (!g_script_mode) {  // reconcile the DPI scale with the display (fonts, layout and style all follow `dpi` below)
+            float sx = 0, sy = 0;
+            glfwGetWindowContentScale(window, &sx, &sy);
+            if (sx > 0.1f) monitor_scale = sx;
+            if (trace::enabled()) {  // (CALLIGRUS_TRACE: log every change of the display geometry, for the RDP squash)
+                int ww = 0, wh = 0, fw = 0, fh = 0;
+                glfwGetWindowSize(window, &ww, &wh);
+                glfwGetFramebufferSize(window, &fw, &fh);
+                static std::string last;
+                char geo[200];
+                std::snprintf(geo, sizeof geo, "display: scale %.3f x %.3f, window %dx%d, framebuffer %dx%d, io %.0fx%.0f fbscale %.3f x %.3f, dpi %.3f, font scale %.3f body %.2f",
+                              sx, sy, ww, wh, fw, fh, io.DisplaySize.x, io.DisplaySize.y, io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y, dpi, fonts.scale, fonts.body);
+                if (last != geo) trace::log("%s", geo), last = geo;
+            }
+        }
+        if (monitor_scale != dpi) {
+            dpi = monitor_scale;
+            st.cache.key = 0;  // (everything measured at the old scale is stale)
+            slides.measured = 0;
+            for_waiting([](Tab& t) { t.st.cache.key = 0, t.slides.measured = 0; });
+            extra_frames = std::max(extra_frames, 3);  // (settle: layout, then draw)
+        }
         float want_scale = dpi * float(cfg.zoom);
         if (slides.on) {  // the slide's own zoom (user zoom is ignored here and kept for normal mode)
             slides_prepare(slides, st, fonts, theme, dpi, cfg.body_size, st.view_w > 0 ? st.view_w : io.DisplaySize.x,
@@ -4633,9 +4672,9 @@ int main() {
         const bool popup_open = ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel);
         const bool typing = io.WantTextInput || zoomed || popup_open;  // a text field (find bar, settings) or a popup has focus
         if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_O) && !g_script_mode)
-            if (auto p = platform::open_file_dialog(native_window(window))) st.open_request = *p;
+            if (auto p = platform::open_file_dialog(native_window(window))) st.open_request = *p, st.open_new_tab = kOpenInNewTab;
         if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_O)) ui.open_recent = true;
-        // Tabs (spec 34; not in an editor preview, which has none): Ctrl+T opens a file in a new one.
+        // Tabs (spec 34; not in an editor preview, which has none): Ctrl+T opens a file in a new one (like Ctrl+O).
         if (!g_editor && !zoomed && !pg.on) {
             if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_T) && !g_script_mode)
                 if (auto p = platform::open_file_dialog(native_window(window))) st.open_request = *p, st.open_new_tab = true;

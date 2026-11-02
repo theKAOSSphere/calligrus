@@ -2,13 +2,9 @@ plugins {
     id("com.android.application")
 }
 
-// The native code is the repository's own CMakeLists.txt (two folders above this one); its libraries
-// come from vcpkg, built for the Android triplets (arm64-android, x64-android), see ../../BUILDING.md.
-// Where vcpkg lives: -PvcpkgRoot=/path, else $VCPKG_ROOT, else ~/vcpkg.
-val vcpkgRoot: String =
-    (project.findProperty("vcpkgRoot") as String?)
-        ?: System.getenv("VCPKG_ROOT")
-        ?: (System.getProperty("user.home") + "/vcpkg")
+// The native code is the repository's own CMakeLists.txt (two folders above this one); its third-party libraries
+// are downloaded and built by CMake itself for each ABI (FetchContent, cmake/deps.cmake), see ../../BUILDING.md.
+// The downloaded archives are kept in $CALLIGRUS_DOWNLOAD_DIR when that is set (CI caches it).
 
 // Which CPUs to build: arm64-v8a is the tablet, x86_64 the emulator.
 // Override: ./gradlew assembleDebug -PcalligrusAbis=arm64-v8a
@@ -44,7 +40,7 @@ android {
         applicationId = "io.github.thekaossphere.calligrus"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
+        versionCode = 3
         versionName = cmakeVersion
 
         ndk {
@@ -54,7 +50,7 @@ android {
         externalNativeBuild {
             cmake {
                 arguments += listOf(
-                    // One static C++ runtime inside libcalligrus.so, like the vcpkg libraries use.
+                    // One static C++ runtime inside libcalligrus.so, shared by the libraries built with it.
                     "-DANDROID_STL=c++_static",
                     // GameActivity's native glue wants RTTI and exceptions.
                     "-DANDROID_CPP_FEATURES=rtti exceptions",
@@ -62,10 +58,7 @@ android {
                     "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON",
                     // The debug APK (the Java side stays debuggable) carries optimised native code without debug
                     // information: -PcalligrusNativeDebug=true gives -O0 -g for a native debugger.
-                    "-DCMAKE_BUILD_TYPE=${if (nativeDebug) "Debug" else "Release"}",
-                    // Dependencies from vcpkg (the triplet follows the ABI: see CMakeLists.txt).
-                    "-DCMAKE_TOOLCHAIN_FILE=$vcpkgRoot/scripts/buildsystems/vcpkg.cmake",
-                    "-DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=${android.ndkDirectory}/build/cmake/android.toolchain.cmake"
+                    "-DCMAKE_BUILD_TYPE=${if (nativeDebug) "Debug" else "Release"}"
                 )
                 cppFlags += "-std=c++20"
             }

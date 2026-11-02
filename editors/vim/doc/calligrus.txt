@@ -1,0 +1,100 @@
+*calligrus.txt*  Live Markdown/Org preview in a separate Calligrus window
+
+Copyright (C) 2026 KαΩSS (theKAOSSphere)
+SPDX-License-Identifier: GPL-3.0-or-later
+
+==============================================================================
+CONTENTS                                                    *calligrus-contents*
+
+    1. Introduction ........ |calligrus-intro|
+    2. Commands ............ |calligrus-commands|
+    3. Options ............. |calligrus-options|
+    4. Behaviour ........... |calligrus-behaviour|
+    5. Tests ............... |calligrus-tests|
+
+==============================================================================
+1. Introduction                                                *calligrus-intro*
+
+Vim sends the buffer text and the cursor line to `calligrus --editor` (the
+Calligrus executable), which shows them in a separate window and scrolls along.
+Ctrl+click in the preview moves the cursor to that spot in the source.  One
+shared process serves the whole Vim session.  Needs Vim 8.2+ with |+job|,
+|+channel|, |+timers| and |+eval| (any normal build).  Protocol: spec/SPEC.md
+sections 15, 17 and 23 (JSON lines on stdin, `goto` lines back on stdout).
+
+==============================================================================
+2. Commands                                                  *calligrus-commands*
+
+                                                               *:CalligrusToggle*
+:CalligrusToggle[!]     Preview the current buffer on or off.  Starts the
+                        shared process if needed.  Buffers whose 'filetype'
+                        is not in |g:calligrus_filetypes| are refused unless
+                        you add [!].  With |g:calligrus_follow| the first
+                        toggle is enough: other Markdown/Org buffers join in;
+                        toggling one off keeps it off.
+
+                                                                 *:CalligrusStop*
+:CalligrusStop          Quit the process; all previews turn off.
+
+                                                             *:CalligrusOpenFile*
+:CalligrusOpenFile      Open the buffer's file in a new, unconnected Calligrus
+                        window (no live link).
+
+==============================================================================
+3. Options                                                    *calligrus-options*
+
+                                                                 *g:calligrus_exe*
+g:calligrus_exe         Program name or path, or a list [program, args...].
+                        Default: "calligrus".
+
+                                                            *g:calligrus_debounce*
+g:calligrus_debounce    While typing, the text is sent at most this often, in
+                        milliseconds.  Default: 150.
+
+                                                              *g:calligrus_follow*
+g:calligrus_follow      1: while the process runs, every buffer you switch to
+                        whose 'filetype' is in |g:calligrus_filetypes| is
+                        previewed.  0: only buffers you toggled on.
+                        Default: 1.
+
+                                                                *g:calligrus_goto*
+g:calligrus_goto        1: Ctrl+click in the preview moves the cursor.
+                        0: ignore the preview's `goto` messages.  Default: 1.
+
+                                                           *g:calligrus_filetypes*
+g:calligrus_filetypes   List of 'filetype's that can be previewed ("org" is
+                        sent as Org, everything else as Markdown).
+                        Default: ['markdown', 'org'].
+
+All options are read when they are used, so `:let g:calligrus_... =` takes
+effect at once.
+
+==============================================================================
+4. Behaviour                                                 *calligrus-behaviour*
+
+While a buffer is previewed: edits are sent (throttled), the preview scrolls
+to your cursor line, switching to another previewed buffer shows that one, and
+deleting a buffer or quitting Vim cleans up.  If you close the preview window,
+previews turn off with a message; |:CalligrusToggle| starts it again.
+
+Search: with 'hlsearch' on, your last search is highlighted in the preview
+after `/`, `?`, `*`, `#`, `n`, `N`; `:nohlsearch` clears it.  Case follows
+'ignorecase', 'smartcase', `\c` and `\C`.  Only plain-text patterns (also
+`\<word\>` and `\V`) are shown; real regexes like `foo.*bar` are not.
+
+Ctrl+click: the buffer is shown in a window of the current tab page that
+already shows it (else in the current window), the cursor goes to the line
+(clamped) at the first non-blank character, and folds there are opened.
+
+==============================================================================
+5. Tests                                                        *calligrus-tests*
+
+From the plugin folder, with `python` on PATH (or $CALLIGRUS_PYTHON) and
+$CALLIGRUS_STUB_LOG naming a scratch file: >
+
+    vim -Nu NONE -es -S test/headless_test.vim
+<
+It prints nothing itself but writes PASS/FAIL lines to $CALLIGRUS_STUB_LOG.report
+and exits non-zero on failure.
+
+ vim:tw=78:ts=8:ft=help:norl:

@@ -1,30 +1,17 @@
 # calligrus: a small native Markdown viewer (Dear ImGui + GLFW + OpenGL 3, md4c parser).
 #
-# Dependencies come from vcpkg in *manifest mode* (see vcpkg.json): pass the vcpkg
-# toolchain file at configure time and vcpkg installs them into build/vcpkg_installed.
-# The easiest way is to run .\build.ps1, which does exactly that.
+# Dependencies are downloaded and built by CMake itself (FetchContent, see cmake/deps.cmake): a plain
+#   cmake -S . -B build && cmake --build build --config Release
+# is all it takes. Pass -DCALLIGRUS_USE_SYSTEM_LIBS=ON to use the system's libraries instead.
 cmake_minimum_required(VERSION 3.21)
 
-# Android (Gradle's CMake, android/): the vcpkg triplet follows the ABI; our overlay triplets (cmake/triplets)
-# are vcpkg's own for API 26 and release libraries only. Must be set before project().
-if(ANDROID_ABI AND NOT VCPKG_TARGET_TRIPLET)
-    if(ANDROID_ABI STREQUAL "arm64-v8a")
-        set(VCPKG_TARGET_TRIPLET arm64-android)
-    elseif(ANDROID_ABI STREQUAL "x86_64")
-        set(VCPKG_TARGET_TRIPLET x64-android)
-    endif()
-    set(VCPKG_OVERLAY_TRIPLETS ${CMAKE_CURRENT_LIST_DIR}/cmake/triplets)
-endif()
-
-# Single-file exe: with the vcpkg triplet x64-windows-static (build.ps1's
-# default) every library is linked in statically, and so is the C/C++ runtime
-# (/MT instead of /MD), so calligrus.exe needs no DLLs next to it. Must be set
-# before project().
-if(VCPKG_TARGET_TRIPLET MATCHES "-static$")
+# Single-file exe on Windows: every library is linked in statically, and so is the C/C++ runtime (/MT instead of
+# /MD), so calligrus.exe needs no DLLs next to it. Must be set before project(). (Ignored by other compilers.)
+if(WIN32 AND NOT CALLIGRUS_USE_SYSTEM_LIBS)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
-project(calligrus VERSION 0.2.0 LANGUAGES CXX)
+project(calligrus VERSION 0.2.1 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -47,18 +34,12 @@ else()
     add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-Wno-unknown-pragmas>)  # MSVC-only `#pragma warning` lines
 endif()
 
-find_package(imgui CONFIG REQUIRED)
-find_package(md4c CONFIG REQUIRED)
+# Third-party libraries (FetchContent, or the system's with CALLIGRUS_USE_SYSTEM_LIBS): imgui, md4c, glfw, stb,
+# libwebp, toml++, HarfBuzz, zlib, FreeType.
+include(cmake/deps.cmake)
 if(NOT ANDROID)  # (Android: EGL and OpenGL ES come from the NDK, the window from GameActivity)
-    find_package(glfw3 CONFIG REQUIRED)
     find_package(OpenGL REQUIRED)
 endif()
-find_package(Stb REQUIRED)                   # stb_image (header-only): PNG / JPEG / GIF / BMP
-find_package(WebP CONFIG REQUIRED)           # libwebp: WebP
-find_package(tomlplusplus CONFIG REQUIRED)   # toml++ (header-only): reading config.toml and themes
-find_package(harfbuzz CONFIG REQUIRED)       # HarfBuzz: shaping (src/shaping.cpp, prose_shaping.cpp) and subsetting fonts for the PDF (src/pdf.cpp)
-find_package(ZLIB REQUIRED)                  # zlib: the PDF export's Flate streams (src/pdf.cpp)
-find_package(Freetype REQUIRED)              # FreeType (imgui already uses it): draws the ligature glyphs (src/shaped_draw.cpp)
 
 # Shared data lives in this repository (themes, grammars, the spec's test files).
 set(CALLIGRUS_DATA_DIR ${CMAKE_SOURCE_DIR})
@@ -128,7 +109,7 @@ if(WIN32)
     )
 endif()
 
-# The version shown by `calligrus --version` (keep vcpkg.json's version-string and the release tag in step).
+# The version shown by `calligrus --version` (keep the release tag in step).
 target_compile_definitions(calligrus PRIVATE CALLIGRUS_VERSION="${PROJECT_VERSION}")
 
 if(MSVC)
@@ -166,7 +147,7 @@ endif()
 # Headless script-mode parser tests (console, no window).
 add_executable(calligrus-script-test src/script_test.cpp src/script.cpp src/editor.cpp src/pdf.cpp src/pages.cpp)
 target_include_directories(calligrus-script-test PRIVATE ${Stb_INCLUDE_DIR})
-target_link_libraries(calligrus-script-test PRIVATE harfbuzz::harfbuzz-subset harfbuzz::harfbuzz ZLIB::ZLIB)
+target_link_libraries(calligrus-script-test PRIVATE harfbuzz::harfbuzz harfbuzz::harfbuzz-subset ZLIB::ZLIB)
 if(MSVC)
     target_compile_options(calligrus-script-test PRIVATE /utf-8 /W4 /permissive-)
 endif()
@@ -272,7 +253,7 @@ endif()
 # PDF writer (spec 33): CID fonts, subsetting, ToUnicode, predictor images; the bundled Plex font (console, no window).
 add_executable(calligrus-pdf-test src/pdf_test.cpp src/pdf.cpp)
 target_include_directories(calligrus-pdf-test PRIVATE ${Stb_INCLUDE_DIR})
-target_link_libraries(calligrus-pdf-test PRIVATE harfbuzz::harfbuzz-subset harfbuzz::harfbuzz ZLIB::ZLIB calligrus-resources)
+target_link_libraries(calligrus-pdf-test PRIVATE harfbuzz::harfbuzz harfbuzz::harfbuzz-subset ZLIB::ZLIB calligrus-resources)
 if(MSVC)
     target_compile_options(calligrus-pdf-test PRIVATE /utf-8 /W4 /permissive-)
 endif()

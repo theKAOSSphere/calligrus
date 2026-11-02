@@ -394,8 +394,8 @@ highlighted (`Action::ThemePicker` in `navigation.cpp`; the dropdown itself is `
 
 ## 10. Static linking (single-file executable)
 
-- vcpkg triplet `x64-windows-static` and `CMAKE_MSVC_RUNTIME_LIBRARY` `MultiThreaded` (/MT);
-  `build.ps1` passes the triplet. Result: `calligrus.exe` runs with no DLLs and (with §8) no
+- every dependency is built from source by CMake (FetchContent, `cmake/deps.cmake`) as a static library, and
+  `CMAKE_MSVC_RUNTIME_LIBRARY` is `MultiThreaded` (/MT). Result: `calligrus.exe` runs with no DLLs and (with §8) no
   assets folder. Check with `dumpbin /dependents`: only system DLLs (kernel32, user32,
   gdi32, opengl32, shell32, comdlg32, dwmapi, ...).
 - On Linux the libraries are static too (triplet `x64-linux`); the executable only links the
@@ -546,11 +546,11 @@ output every time.
 - **Script**: UTF-8 text, one command per line, `#` comments, blank lines ok.
   Paths relative to the script's folder, except `shot` files: relative to
   `--out DIR` (env `CALLIGRUS_SCRIPT_OUT`) when given, else the script's folder.
-  Missing folders for shots are created. Commands:
+  Missing folders for shots are created. Real windows read the monitor's content scale from GLFW every frame (and wake on the content-scale, framebuffer-size and refresh callbacks), because a lock + Remote Desktop session or a monitor change alters it with no other sign; fonts, layout, style and caches rebuild whenever it differs from the one in use. Commands:
   | Command | Meaning |
   |---|---|
   | `size W H` | client size in pixels (default 1200 900) |
-  | `scale S` | DPI scale (default 1.0) |
+  | `scale S` | DPI scale (default 1.0). It sets the pseudo-monitor's content scale; the frame loop reconciles it like a real display change (below), so a `scale` mid-run (with or without `size`) must give the same pixels as a fresh run at that scale (`dpi-change`, `dpi-fresh` fixtures) |
   | `open PATH` | open a file (as from the dialog: history, recent, scroll restore) |
   | `keys TOKENS` | key presses, space-separated tokens: a letter/digit/symbol (`j`, `G` = shift+g, `/`, `[`), named keys (`esc enter tab space up down left right pageup pagedown home end f5 f11 backspace`), modifiers joined with `+` (`ctrl+f`, `ctrl+shift+o`, `alt+left`, `ctrl+plus`, `ctrl+minus`, `ctrl+0`) |
   | `type TEXT` | text input (rest of the line) into whatever has focus |
@@ -1562,15 +1562,15 @@ buffer the editor has focused).
   The names are measured and drawn with the document font's exact advances plus the face's kerning
   (`prose_shaping::kerned_pieces`), not ImGui's whole-pixel UI advances, and a tab is
   `ceil(4 + name + 4 + x + 4)` points wide.
-- **Opening**: Open / recent / drop / command line replace the current tab's document, (history keeps working). A NEW tab: Ctrl+click or middle-click on a link to a Markdown/Org file;
-  Ctrl+T opens the file dialog into a new tab; files given on the command line (several allowed)
+- **Opening**: Recent / drop replace the current tab's document, (history keeps working). A NEW tab: Open (Ctrl+O, the toolbar button; Android, which has no tabs yet, replaces); Ctrl+click or middle-click on a link to a Markdown/Org file;
+  Ctrl+T (the same as Ctrl+O); files given on the command line (several allowed)
   each open in a tab; "Open in new tab" in the recent popup (Ctrl+Enter there). Opening a file
   that is already open in a tab switches to that tab instead (same rule as recent files: same
   path, case-insensitive on Windows). A new tab is appended at the end and becomes the active one;
   an unreadable file opens nothing. Several command-line files (also a repeated one: that file
   once): the first is shown, the others wait in tabs behind it. Ctrl+click on a row of the recent
   popup is a new tab too. Exception: when the current tab shows the built-in demo (no file), the
-  file takes the demo tab's place instead of opening next to it (so Ctrl+T from a fresh window
+  file takes the demo tab's place instead of opening next to it (so Ctrl+O from a fresh window
   gives one tab, not demo + file). Ctrl+click / middle-click on anything but a link to a Markdown/Org file
   behaves as without Ctrl (a middle-click on a link does not start autoscroll).
 - **Switching / closing**: Ctrl+Tab / Ctrl+Shift+Tab (next / previous, wrapping), Ctrl+PgDn /
