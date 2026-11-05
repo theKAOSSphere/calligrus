@@ -197,13 +197,17 @@ touch::Tracker* g_ui = nullptr;
 // Both g_doc and g_h see the gesture until one of them crosses the slop first: that axis is kept, the other is cancelled.
 touch::Tracker* g_h = nullptr;
 std::vector<android_shell::HScrollBlock> g_hblocks;
-bool g_hcand = false;       // the finger went down on a block that scrolls sideways
+bool g_hcand = false;       // the finger went down on a block that scrolls sideways (or on the tab strip)
+bool g_hstrip = false;      // ...and it is the tab strip (the finger is a widget finger too: its tap clicks a tab, spec 35)
+float g_strip[4] = {0, 0, 0, 0};  // the tab strip's scrolling part (empty when there is none)
+char g_strip_key = 0;             // (its address names the strip in DocTouch::h_key)
 int g_hlock = 0;            // 0 undecided, 1 vertical (the page), 2 horizontal (the block)
 const void* g_hkey = nullptr;
 Target g_target = kNone;
 float g_region[4] = {0, 0, 0, 0};
 bool g_ui_only = false;
 android_shell::DocTouch g_doc_touch;
+std::vector<std::pair<std::string, std::string>> g_replacements;  // (old copy, new copy) of documents read again from their source
 std::deque<std::pair<float, float>> g_clicks;  // taps waiting to be clicked into ImGui
 int g_press_phase = 0;                         // 1: a resting finger holds the button down (see ImGui_ImplGlfw_NewFrame)
 int g_click_phase = 0;                         // 1: the button is down (release it next frame), 2: move the pointer away
@@ -338,6 +342,11 @@ void handle_motion(const GameActivityMotionEvent& e) {
                             g_h->down(e.pointers[index].id, y, x, t);
                             break;
                         }
+                g_hstrip = false;
+                if (g_target == kWidgets && x >= g_strip[0] && x < g_strip[2] && y >= g_strip[1] && y < g_strip[3]) {  // the tab strip: sideways drags scroll it
+                    g_hcand = g_hstrip = true, g_hkey = &g_strip_key;
+                    g_h->down(e.pointers[index].id, y, x, t);
+                }
             } else if (g_hcand) {  // two fingers: a pinch, not a block scroll
                 g_h->cancel();
                 g_hcand = false;
@@ -418,7 +427,8 @@ void handle_motion(const GameActivityMotionEvent& e) {
             } else if (auto* tr = tracker()) {
                 tr->up(e.pointers[index].id, x, y, t);
                 if (g_touch_log && action == AMOTION_EVENT_ACTION_UP) log_lift(*tr);
-                if (g_hcand) g_h->cancel();  // (a tap on the block is the document tap)
+                if (g_hstrip) g_h->up(e.pointers[index].id, y, x, t);  // (the widget tracker has the tap; this one the sideways fling)
+                else if (g_hcand) g_h->cancel();  // (a tap on the block is the document tap)
             }
             if (action == AMOTION_EVENT_ACTION_UP || e.pointerCount <= 1) g_target = kNone;
             break;
@@ -426,7 +436,7 @@ void handle_motion(const GameActivityMotionEvent& e) {
             if (g_doc) g_doc->cancel();
             if (g_ui) g_ui->cancel();
             if (g_h) g_h->cancel();
-            g_hcand = false, g_hlock = 0;
+            g_hcand = g_hstrip = false, g_hlock = 0;
             if (g_rawdrag && ImGui::GetCurrentContext()) {
                 ImGui::GetIO().AddMouseButtonEvent(0, false);
                 g_press_phase = 0;
@@ -493,8 +503,13 @@ bool process_input() {
 // Documents that came from Java (picker, "Open with", share): open like a dropped file.
 bool deliver_opened() {
     bool any = false;
-    while (auto p = shell::take_opened_path()) {
-        g_drop_path = *p;
+    while (auto o = shell::take_opened()) {
+        if (!o->replaces.empty()) {  // a newer read of a document that may be open in a tab: the app decides (take_replacement)
+            g_replacements.push_back({o->replaces, o->path});
+            any = true;
+            continue;
+        }
+        g_drop_path = o->path;
         const char* paths[1] = {g_drop_path.c_str()};
         if (g_cb_drop) g_cb_drop(reinterpret_cast<GLFWwindow*>(&g_window), 1, paths);
         any = true;
@@ -735,6 +750,8 @@ Insets insets() {
 DocTouch doc_touch() { return g_doc_touch; }
 
 void set_hscroll_blocks(const std::vector<HScrollBlock>& blocks) { g_hblocks = blocks; }
+void set_tab_strip(float x0, float y0, float x1, float y1) { g_strip[0] = x0, g_strip[1] = y0, g_strip[2] = x1, g_strip[3] = y1; }
+const void* tab_strip_key() { return &g_strip_key; }
 void doc_touch_hit_end_h() {
     if (g_h) g_h->stop_fling();
 }
@@ -757,6 +774,12 @@ bool touch_busy() {
 void set_light_bars(bool light) { shell::set_light_bars(light); }
 
 void set_background_hook(std::function<void()> hook) { g_background_hook = std::move(hook); }
+std::optional<std::pair<std::string, std::string>> take_replacement() {
+    if (g_replacements.empty()) return std::nullopt;
+    auto r = std::move(g_replacements.front());
+    g_replacements.erase(g_replacements.begin());
+    return r;
+}
 bool legacy_power() { return g_legacy_power; }
 bool consume_woken() { return std::exchange(g_woken, false); }
 void count_frame() {

@@ -43,7 +43,7 @@ Plain Emacs, optionally start the preview for every Markdown buffer:
 - =follow= (=calligrus-follow=, default on): once the preview is running, every Markdown buffer you visit joins in. Toggling a buffer off mutes it until you toggle it on again.
 - =M-x calligrus-stop=: quit Calligrus; all previews off. Quitting Emacs does it too.
 - =M-x calligrus-open-file=: open the buffer's file in a separate, unlinked calligrus.
-- =calligrus-preview-mode= is the buffer-local minor mode (" MdV" in the mode line).
+- =calligrus-preview-mode= is the buffer-local minor mode (" Cg" in the mode line).
 - If Calligrus exits or crashes: previews turn off and Emacs says so; toggle again to restart. Calligrus's stderr goes to the =*calligrus-log*= buffer.
 
 * Ctrl+click in the preview

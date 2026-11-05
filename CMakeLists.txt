@@ -11,10 +11,31 @@ if(WIN32 AND NOT CALLIGRUS_USE_SYSTEM_LIBS)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
-project(calligrus VERSION 0.2.1 LANGUAGES C CXX)
+project(calligrus VERSION 0.3.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Release builds: one section per function and per data object, and the linker drops every one that nothing
+# uses (and folds identical ones), for our code and the downloaded libraries alike (these flags come before
+# deps.cmake). MSVC: /Gy /Gw with /OPT:REF /OPT:ICF. GCC/Clang (Linux, Android; the NDK does this already):
+# -ffunction-sections -fdata-sections with --gc-sections, and the symbols stripped (-s) on desktop (Android's
+# Gradle build strips by itself). Nothing here changes what the program can do.
+if(MSVC)
+    string(APPEND CMAKE_C_FLAGS_RELEASE " /Gy /Gw")
+    string(APPEND CMAKE_CXX_FLAGS_RELEASE " /Gy /Gw")
+    string(APPEND CMAKE_EXE_LINKER_FLAGS_RELEASE " /OPT:REF /OPT:ICF")
+else()
+    string(APPEND CMAKE_C_FLAGS_RELEASE " -ffunction-sections -fdata-sections")
+    string(APPEND CMAKE_CXX_FLAGS_RELEASE " -ffunction-sections -fdata-sections")
+    if(NOT APPLE)
+        string(APPEND CMAKE_EXE_LINKER_FLAGS_RELEASE " -Wl,--gc-sections")
+        string(APPEND CMAKE_SHARED_LINKER_FLAGS_RELEASE " -Wl,--gc-sections")
+        if(NOT ANDROID)
+            string(APPEND CMAKE_EXE_LINKER_FLAGS_RELEASE " -s")
+        endif()
+    endif()
+endif()
 
 # Per-OS pieces: platform.cpp (Win32), platform_android.cpp (Android: the app is a shared library
 # loaded by GameActivity, see cmake/android.cmake) or platform_linux.cpp, and the system libraries

@@ -1,18 +1,89 @@
 name: Release
 
-# Push a tag such as v0.1.0 to build the packages (Windows, Linux, signed Android APK) and create a DRAFT release holding them.
+# Push a tag such as v0.1.0 to publish the packages (Windows, Linux, signed Android APK) as a DRAFT release.
+# The packages are the ones CI built for the tagged commit (ci.yml, artifacts calligrus-*): this workflow waits for
+# that CI run and reuses its artifacts. Without a successful CI run of that commit (CI failed, never ran, or its
+# artifacts expired) the packages are built here, as before, so a release does not depend on CI.
 on:
   push:
     tags:
       - "v*"
 
+permissions:
+  contents: read
+
 # The libraries are downloaded by CMake (FetchContent, cmake/deps.cmake); the archives are kept in this folder, which
-# actions/cache saves and restores.
+# actions/cache saves and restores (only the fallback builds use it).
 env:
   CALLIGRUS_DOWNLOAD_DIR: ${{ github.workspace }}/.deps-cache
 
 jobs:
+  # Decides where the packages come from: the newest successful CI run of this commit that still has all three
+  # packages (reuse), or the build jobs below (fallback). Waits up to 40 minutes for a CI run that is still going.
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    permissions:
+      actions: read
+    outputs:
+      reuse: ${{ steps.find.outputs.reuse }}
+      run_id: ${{ steps.find.outputs.run_id }}
+    steps:
+      - name: Find the CI run of this commit
+        id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -uo pipefail
+          runs_url="repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$SHA&per_page=50"
+          start=$(date +%s)
+          reuse=false
+          run_id=""
+          while :; do
+            elapsed=$(( $(date +%s) - start ))
+            ids=$(gh api "$runs_url" --jq '.workflow_runs[] | select(.conclusion == "success") | .id' 2>/dev/null) || ids=""
+            for id in $ids; do
+              names=$(gh api "repos/$REPO/actions/runs/$id/artifacts?per_page=100" \
+                --jq '[.artifacts[] | select(.expired | not) | .name] | join(" ")' 2>/dev/null) || names=""
+              ok=true
+              for n in calligrus-windows-x64 calligrus-linux-x64 calligrus-android; do
+                case " $names " in *" $n "*) ;; *) ok=false ;; esac
+              done
+              if [ "$ok" = true ]; then
+                reuse=true
+                run_id=$id
+                break
+              fi
+            done
+            [ "$reuse" = true ] && break
+            pending=$(gh api "$runs_url" --jq '[.workflow_runs[] | select(.status != "completed")] | length' 2>/dev/null) || pending=0
+            total=$(gh api "$runs_url" --jq '.total_count' 2>/dev/null) || total=0
+            if [ "$pending" -gt 0 ] && [ "$elapsed" -lt 2400 ]; then
+              echo "CI is still running for this commit (${elapsed}s): waiting."
+              sleep 30
+              continue
+            fi
+            # A tag pushed together with its commit: CI may take a moment to show up.
+            if [ "$pending" -eq 0 ] && [ "$total" -eq 0 ] && [ "$elapsed" -lt 180 ]; then
+              echo "No CI run for this commit yet (${elapsed}s): waiting."
+              sleep 30
+              continue
+            fi
+            break
+          done
+          if [ "$reuse" = true ]; then
+            echo "Reusing the packages of CI run $run_id."
+          else
+            echo "No successful CI run with the packages for this commit: the packages are built by this workflow."
+          fi
+          echo "reuse=$reuse" >> "$GITHUB_OUTPUT"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
   windows:
+    needs: prepare
+    if: always() && needs.prepare.outputs.reuse != 'true'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,10 +109,10 @@ jobs:
           }
           if ($failed) { throw "failed: $($failed -join ', ')" }
 
-      - name: Package
+      - name: Package (as CI)
         shell: pwsh
         run: |
-          $name = "calligrus-${{ github.ref_name }}-windows-x64"
+          $name = "calligrus-windows-x64"
           $dir = Join-Path $env:RUNNER_TEMP $name
           New-Item -ItemType Directory -Force "$dir\fonts" | Out-Null
           Copy-Item build\Release\calligrus.exe $dir
@@ -52,10 +123,14 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: package-windows
-          path: calligrus-*-windows-x64.zip
+          name: calligrus-windows-x64
+          path: calligrus-windows-x64.zip
+          retention-days: 90
+          if-no-files-found: error
 
   linux:
+    needs: prepare
+    if: always() && needs.prepare.outputs.reuse != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -86,9 +161,9 @@ jobs:
           done
           exit $fail
 
-      - name: Package
+      - name: Package (as CI)
         run: |
-          name="calligrus-${{ github.ref_name }}-linux-x64"
+          name="calligrus-linux-x64"
           mkdir -p "$name/fonts"
           cp build/calligrus LICENSE THIRD-PARTY.md "$name/"
           cp assets/fonts/*.txt "$name/fonts/"
@@ -97,11 +172,15 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: package-linux
-          path: calligrus-*-linux-x64.tar.gz
+          name: calligrus-linux-x64
+          path: calligrus-linux-x64.tar.gz
+          retention-days: 90
+          if-no-files-found: error
 
   # The signed arm64 APK. Without the signing secrets this job fails: a release must never carry an unsigned APK.
   android:
+    needs: prepare
+    if: always() && needs.prepare.outputs.reuse != 'true'
     runs-on: ubuntu-latest
     env:
       ANDROID_NDK_VERSION: 27.2.12479018
@@ -167,33 +246,88 @@ jobs:
           path: .deps-cache
           key: ${{ steps.deps-cache.outputs.cache-primary-key }}
 
-      - name: Name and verify the APK
+      - name: Package (as CI)
         run: |
-          cp android/app/build/outputs/apk/release/app-release.apk "calligrus-${{ github.ref_name }}-android-arm64.apk"
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs calligrus-*-android-arm64.apk | tee "$RUNNER_TEMP/certs.txt"
-          grep -q 'certificate DN' "$RUNNER_TEMP/certs.txt"
+          mkdir -p dist
+          cp android/app/build/outputs/apk/release/app-release.apk "dist/calligrus-android-arm64.apk"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: package-android
-          path: calligrus-*-android-arm64.apk
+          name: calligrus-android
+          path: dist/calligrus-android-arm64.apk
+          retention-days: 90
           if-no-files-found: error
 
       - name: Delete the keystore
         if: always()
         run: rm -f "$RUNNER_TEMP/calligrus-release.jks"
 
+  # Gathers the three packages (from the reused CI run, or from the build jobs above), names them after the tag
+  # and creates the draft release. The archives keep the layout of earlier releases: the folder inside is named
+  # after the tag (CI packages them without the version).
   release:
-    needs: [windows, linux, android]
+    needs: [prepare, windows, linux, android]
+    if: always() && (needs.prepare.outputs.reuse == 'true' || (needs.windows.result == 'success' && needs.linux.result == 'success' && needs.android.result == 'success'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: read
+    env:
+      TAG: ${{ github.ref_name }}
     steps:
-      - uses: actions/download-artifact@v4
+      - name: Download the packages of CI run ${{ needs.prepare.outputs.run_id }}
+        if: needs.prepare.outputs.reuse == 'true'
+        uses: actions/download-artifact@v4
         with:
-          pattern: package-*
+          pattern: calligrus-*
           merge-multiple: true
           path: dist
+          run-id: ${{ needs.prepare.outputs.run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Download the packages of this run
+        if: needs.prepare.outputs.reuse != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: calligrus-*
+          merge-multiple: true
+          path: dist
+
+      - name: Name the packages after the tag
+        run: |
+          set -euo pipefail
+          cd dist
+          out="$PWD"
+          ls -l
+          # Windows: the same layout as before, the folder inside named after the tag.
+          mkdir -p ../unpack/win
+          unzip -q calligrus-windows-x64.zip -d ../unpack/win
+          mv ../unpack/win/calligrus-windows-x64 "../unpack/win/calligrus-$TAG-windows-x64"
+          (cd ../unpack/win && zip -qr "$out/calligrus-$TAG-windows-x64.zip" "calligrus-$TAG-windows-x64")
+          # Linux: the same, as a tar.gz.
+          mkdir -p ../unpack/lin
+          tar xzf calligrus-linux-x64.tar.gz -C ../unpack/lin
+          mv ../unpack/lin/calligrus-linux-x64 "../unpack/lin/calligrus-$TAG-linux-x64"
+          tar czf "calligrus-$TAG-linux-x64.tar.gz" -C ../unpack/lin "calligrus-$TAG-linux-x64"
+          # Android: the APK is already signed (CI or the build above) and only needs the tag in its name.
+          cp calligrus-android-arm64.apk "calligrus-$TAG-android-arm64.apk"
+          rm -f calligrus-windows-x64.zip calligrus-linux-x64.tar.gz calligrus-android-arm64.apk
+          ls -l
+
+      - name: Install the Android build-tools (apksigner)
+        run: |
+          sdk="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          if [ ! -x "$sdk/build-tools/36.0.0/apksigner" ]; then
+            sdkmanager="$sdk/cmdline-tools/latest/bin/sdkmanager"
+            yes | "$sdkmanager" --licenses > /dev/null || true
+            "$sdkmanager" "build-tools;36.0.0"
+          fi
+
+      - name: Verify the APK signature
+        run: |
+          sdk="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          "$sdk/build-tools/36.0.0/apksigner" verify --print-certs dist/calligrus-*-android-arm64.apk | tee "$RUNNER_TEMP/certs.txt"
+          grep -q 'certificate DN' "$RUNNER_TEMP/certs.txt"
 
       - name: Create the draft release
         uses: softprops/action-gh-release@v2

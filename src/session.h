@@ -106,6 +106,8 @@ struct State {
     // while 2 or more tabs with a file are open; the apps fill them in just before saving.
     std::vector<std::string> tabs;
     size_t active_tab = 1;
+    // Written even with one tab (Android: a killed process comes back to its document, spec 35). Not read or saved.
+    bool keep_single_tab = false;
     // Top-level keys this version doesn't know (from a newer app or the Rust port),
     // as TOML text so saving doesn't drop them: plain values, then [tables].
     std::string extra_values, extra_tables;

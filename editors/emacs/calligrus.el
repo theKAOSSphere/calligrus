@@ -3,7 +3,7 @@
 ;; Copyright (C) 2026 KαΩSS (theKAOSSphere)
 ;; Author: KαΩSS (theKAOSSphere)
 ;; URL: https://github.com/theKAOSSphere/calligrus
-;; Version: 0.2.1
+;; Version: 0.3.0
 ;; Package-Requires: ((emacs "27.1"))
 ;; Keywords: markdown, outlines, convenience, tools
 ;; SPDX-License-Identifier: GPL-3.0-or-later
@@ -566,7 +566,7 @@ anything that is a real regexp gives \"\" (a wrong highlight is worse than none)
 (define-minor-mode calligrus-preview-mode
   "Preview this buffer live in the shared calligrus window.
 Normally turned on by `calligrus-toggle'."
-  :lighter " MdV"
+  :lighter " Cg"
   :group 'calligrus
   (if calligrus-preview-mode
       (if (not (calligrus--ensure-process))

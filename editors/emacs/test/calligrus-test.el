@@ -64,7 +64,7 @@
      (unwind-protect (progn ,@body)
        (calligrus-stop)
        (dolist (b (buffer-list))
-         (when (string-prefix-p "mdv-t" (buffer-name b))
+         (when (string-prefix-p "cg-t" (buffer-name b))
            (let ((kill-buffer-hook nil)) (kill-buffer b))))
        (delete-other-windows)
        (ignore-errors (delete-file calligrus-test--log))
@@ -73,7 +73,7 @@
 
 (defun calligrus-test--buffer (name text &optional mode)
   "A buffer shown in the selected window with TEXT (cursor at the end)."
-  (let ((buf (generate-new-buffer (concat "mdv-t-" name))))
+  (let ((buf (generate-new-buffer (concat "cg-t-" name))))
     (switch-to-buffer buf)
     (insert text)
     (funcall (or mode #'markdown-mode))
@@ -112,25 +112,25 @@
 
 (ert-deftest calligrus-test-open-has-path ()
   (calligrus-test--session
-    (let ((file (make-temp-file "mdv-sample" nil ".md")))
+    (let ((file (make-temp-file "cg-sample" nil ".md")))
       (unwind-protect
           (progn
             (find-file file)
-            (rename-buffer "mdv-t-file")
+            (rename-buffer "cg-t-file")
             (insert "hello")
             (markdown-mode)
             (calligrus-toggle)
             (should (calligrus-test--wait (lambda () (>= (calligrus-test--count "open") 1))))
             (let ((p (alist-get 'path (car (calligrus-test--of "open")))))
-              (should (string-match-p "mdv-sample.*\\.md\\'" p))
+              (should (string-match-p "cg-sample.*\\.md\\'" p))
               (when (eq system-type 'windows-nt) (should-not (string-match-p "/" p)))))
         (set-buffer-modified-p nil)
-        (let ((kill-buffer-hook nil)) (kill-buffer "mdv-t-file"))
+        (let ((kill-buffer-hook nil)) (kill-buffer "cg-t-file"))
         (delete-file file)))))
 
 (ert-deftest calligrus-test-org-format ()
   (calligrus-test--session
-    (with-current-buffer (get-buffer-create "mdv-t-org")
+    (with-current-buffer (get-buffer-create "cg-t-org")
       (insert "* Heading
 
 Text.
@@ -368,17 +368,17 @@ Text.
 
 (ert-deftest calligrus-test-open-file ()
   (calligrus-test--session
-    (let ((file (make-temp-file "mdv-sample" nil ".md")))
+    (let ((file (make-temp-file "cg-sample" nil ".md")))
       (unwind-protect
           (progn
             (find-file file)
-            (rename-buffer "mdv-t-file")
+            (rename-buffer "cg-t-file")
             (calligrus-open-file)
             (should (calligrus-test--wait
-                     (lambda () (cl-some (lambda (l) (string-match-p "\\`ARGS .*mdv-sample" l))
+                     (lambda () (cl-some (lambda (l) (string-match-p "\\`ARGS .*cg-sample" l))
                                          (calligrus-test--lines)))))
             (should-not (calligrus--alive-p)))
-        (let ((kill-buffer-hook nil)) (kill-buffer "mdv-t-file"))
+        (let ((kill-buffer-hook nil)) (kill-buffer "cg-t-file"))
         (delete-file file)))))
 
 (ert-deftest calligrus-test-non-ascii-roundtrip ()
@@ -409,7 +409,7 @@ Text.
     (line-number-at-pos (window-point) t)))
 
 (ert-deftest calligrus-test-notes-buffer ()
-  (let ((calligrus-notes-buffer "*mdv-t-notes*"))
+  (let ((calligrus-notes-buffer "*cg-t-notes*"))
     (unwind-protect
         (progn
           ;; no notes and no buffer yet: nothing appears
@@ -479,7 +479,7 @@ Text.
     (let* ((a (calligrus-test--start)) (doc (calligrus--doc a)) (win-a (selected-window)))
       (let ((win-b (split-window)))
         (select-window win-b)
-        (switch-to-buffer (generate-new-buffer "mdv-t-other"))
+        (switch-to-buffer (generate-new-buffer "cg-t-other"))
         (calligrus-test--goto doc 5)
         (should (calligrus-test--wait (lambda () (eq (selected-window) win-a))))
         (should (= (calligrus-test--line) 5))

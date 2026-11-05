@@ -1,10 +1,15 @@
 name: CI
 
-# Tags (v*) are the release workflow's business.
+# Tags (v*) are the release workflow's business. Every run also packages the Windows zip, the Linux tar.gz and the
+# Android APK the way a release ships them (artifacts calligrus-windows-x64, calligrus-linux-x64, calligrus-android,
+# kept 90 days): release.yml reuses them for the tagged commit instead of building again.
 on:
   push:
     branches: ['**']
   pull_request:
+
+permissions:
+  contents: read
 
 # The libraries are downloaded by CMake (FetchContent, cmake/deps.cmake); the archives are kept in this folder, which
 # actions/cache saves and restores.
@@ -14,6 +19,10 @@ env:
 jobs:
   windows:
     runs-on: windows-latest
+    # sccache (GitHub Actions cache backend) wraps the compiler; Ninja, because the Visual Studio generator ignores
+    # the compiler launcher. The MSVC environment comes from the msvc-dev-cmd step below.
+    env:
+      SCCACHE_GHA_ENABLED: "true"
     steps:
       - uses: actions/checkout@v4
 
@@ -27,9 +36,20 @@ jobs:
           key: deps-windows-${{ hashFiles('cmake/deps.cmake') }}
           restore-keys: deps-windows-
 
-      - name: Build (Release, MSVC, static)
+      - name: Compiler cache (sccache)
+        uses: mozilla-actions/sccache-action@v0.0.11
+
+      - name: MSVC environment (for Ninja)
+        uses: ilammy/msvc-dev-cmd@v1.13.0
+        with:
+          arch: x64
+
+      # Single-config Ninja build in build\Release: the executables land where the tests and the visual suite look.
+      - name: Build (Release, MSVC, static, Ninja + sccache)
         shell: pwsh
-        run: .\build.ps1
+        env:
+          CALLIGRUS_COMPILER_LAUNCHER: sccache
+        run: .\build.ps1 -Generator Ninja -BuildDir build\Release
 
       - name: Save downloaded libraries
         if: always() && steps.deps-cache.outputs.cache-hit != 'true'
@@ -48,6 +68,30 @@ jobs:
             if ($LASTEXITCODE -ne 0) { $failed += $t.Name }
           }
           if ($failed) { throw "failed: $($failed -join ', ')" }
+
+      # The same folder layout as the release archive (the release renames the archive and its folder after the tag).
+      - name: Package (as the release)
+        shell: pwsh
+        run: |
+          $name = "calligrus-windows-x64"
+          $dir = Join-Path $env:RUNNER_TEMP $name
+          New-Item -ItemType Directory -Force "$dir\fonts" | Out-Null
+          Copy-Item build\Release\calligrus.exe $dir
+          Copy-Item LICENSE, THIRD-PARTY.md $dir
+          Copy-Item assets\fonts\*.txt "$dir\fonts"
+          Copy-Item editors "$dir\editors" -Recurse
+          Compress-Archive -Path $dir -DestinationPath "$name.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: calligrus-windows-x64
+          path: calligrus-windows-x64.zip
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Compiler cache statistics
+        if: always()
+        run: sccache --show-stats
 
       # The app needs OpenGL 3.3; the hosted Windows runners only have the GDI 1.1 driver, so
       # install Mesa's software renderer.
@@ -79,6 +123,9 @@ jobs:
 
   linux:
     runs-on: ubuntu-latest
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      CALLIGRUS_COMPILER_LAUNCHER: sccache
     steps:
       - uses: actions/checkout@v4
 
@@ -91,6 +138,9 @@ jobs:
           path: .deps-cache
           key: deps-linux-${{ hashFiles('cmake/deps.cmake') }}
           restore-keys: deps-linux-
+
+      - name: Compiler cache (sccache)
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       - name: Install build dependencies
         run: |
@@ -119,6 +169,27 @@ jobs:
           done
           exit $fail
 
+      # The same folder layout as the release archive (the release renames the archive and its folder after the tag).
+      - name: Package (as the release)
+        run: |
+          name="calligrus-linux-x64"
+          mkdir -p "$name/fonts"
+          cp build/calligrus LICENSE THIRD-PARTY.md "$name/"
+          cp assets/fonts/*.txt "$name/fonts/"
+          cp -r editors "$name/editors"
+          tar czf "$name.tar.gz" "$name"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: calligrus-linux-x64
+          path: calligrus-linux-x64.tar.gz
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Compiler cache statistics
+        if: always()
+        run: sccache --show-stats
+
       - name: Visual suite
         run: |
           if [ -d spec/tests/visual/refs/linux ]; then
@@ -145,6 +216,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       ANDROID_NDK_VERSION: 27.2.12479018
+      SCCACHE_GHA_ENABLED: "true"
+      CALLIGRUS_COMPILER_LAUNCHER: sccache
     steps:
       - uses: actions/checkout@v4
 
@@ -180,6 +253,9 @@ jobs:
           path: .deps-cache
           key: deps-android-${{ hashFiles('cmake/deps.cmake') }}
           restore-keys: deps-android-
+
+      - name: Compiler cache (sccache)
+        uses: mozilla-actions/sccache-action@v0.0.11
 
       # The runner has an Android SDK; sdkmanager adds what the Gradle files pin (it skips what is installed).
       - name: Install Android SDK packages
@@ -219,25 +295,29 @@ jobs:
         run: |
           mkdir -p dist
           if [ "${{ steps.sign.outputs.signed }}" = "true" ]; then
-            cp android/app/build/outputs/apk/release/app-release.apk "dist/calligrus-${GITHUB_SHA::7}.apk"
+            cp android/app/build/outputs/apk/release/app-release.apk "dist/calligrus-android-arm64.apk"
           else
-            cp android/app/build/outputs/apk/release/app-release-unsigned.apk "dist/calligrus-${GITHUB_SHA::7}-unsigned.apk"
+            cp android/app/build/outputs/apk/release/app-release-unsigned.apk "dist/calligrus-android-arm64-unsigned.apk"
           fi
           ls -l dist
 
       - name: Verify the signature
         if: steps.sign.outputs.signed == 'true'
         run: |
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs dist/*.apk | tee "$RUNNER_TEMP/certs.txt"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs dist/calligrus-android-arm64.apk | tee "$RUNNER_TEMP/certs.txt"
           grep -q 'certificate DN' "$RUNNER_TEMP/certs.txt"
+
+      - name: Compiler cache statistics
+        if: always()
+        run: sccache --show-stats || true
 
       - name: Upload the signed APK
         if: steps.sign.outputs.signed == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: calligrus-android
-          path: dist/*.apk
-          retention-days: 14
+          path: dist/calligrus-android-arm64.apk
+          retention-days: 90
           if-no-files-found: error
 
       - name: Upload the unsigned APK
@@ -245,7 +325,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: calligrus-android-unsigned
-          path: dist/*.apk
+          path: dist/calligrus-android-arm64-unsigned.apk
           retention-days: 14
           if-no-files-found: error
 

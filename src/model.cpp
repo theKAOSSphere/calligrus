@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
@@ -1076,6 +1077,38 @@ const char* looks_binary(std::string_view bytes) {
 
 std::string binary_message(const std::string& name, const std::string& kind) {
     return name + " is not a text file (looks like " + kind + "). Calligrus shows Markdown and Org files.";
+}
+
+std::string too_large_message(const std::string& name, uint64_t bytes, bool android) {
+    auto mb = [](double b) {
+        char buf[32];
+        std::snprintf(buf, sizeof buf, "%.1f MB", b / 1e6);
+        return std::string(buf);
+    };
+    if (!android) return name + " is " + mb(double(bytes)) + " and may take a long time and a lot of memory to display.";
+    return name + " is too large to display: " + mb(double(bytes)) + ", the limit is " + mb(double(kMaxFileBytesAndroid)) + ".";
+}
+
+bool is_plain_text_path(std::string_view path) {
+    const size_t dot = path.rfind('.');
+    if (dot == std::string_view::npos) return false;
+    std::string ext(path.substr(dot));
+    for (char& c : ext) c = char(std::tolower(static_cast<unsigned char>(c)));
+    return ext == ".csv" || ext == ".tsv" || ext == ".log";
+}
+
+std::string plain_text_as_markdown(std::string_view text) {
+    size_t longest = 0, run = 0;
+    for (char c : text) {
+        run = c == '`' ? run + 1 : 0;
+        longest = std::max(longest, run);
+    }
+    const std::string fence(std::max<size_t>(3, longest + 1), '`');
+    std::string out = fence + "\n";
+    out.append(text);
+    if (text.empty() || text.back() != '\n') out += '\n';
+    out += fence + "\n";
+    return out;
 }
 
 }  // namespace md

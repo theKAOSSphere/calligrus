@@ -224,6 +224,9 @@ int main() {
         check(back.tabs == t.tabs && back.active_tab == 2 && back.extra_values.empty(), "tabs: round trip, known keys");
         t.tabs = {"only.md"};
         check(write_state(t, true).find("tabs") == std::string::npos, "tabs: one tab is not written");
+        t.keep_single_tab = true;
+        check(write_state(t, true).find("tabs = ['only.md']\nactive_tab = 1\n") != std::string::npos, "tabs: one tab is written when asked (Android)");
+        t.keep_single_tab = false;
         check(parse_state("tabs = ['a', 5, '', 'b']\nactive_tab = 9\n").tabs.size() == 2 && parse_state("tabs = ['a']\nactive_tab = 9\n").active_tab == 1,
               "tabs: bad entries skipped, active_tab clamped");
         const State known = parse_state("tabs = ['a','b']\nactive_tab = 2\nfuture = 1\n");

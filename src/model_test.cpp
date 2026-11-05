@@ -442,6 +442,19 @@ int main() {
         check_eq(kind(std::string(8191, 'a') + "\xC3\xA9"), "text", "binary: a character cut by the sample end");
         check_eq(md::binary_message("a.pdf", "a PDF"), "a.pdf is not a text file (looks like a PDF). Calligrus shows Markdown and Org files.", "binary: message");
     }
+    {
+        // Very large files and data files (spec 3).
+        check_eq(md::too_large_message("big.csv", 7800047, true), "big.csv is too large to display: 7.8 MB, the limit is 1.0 MB.", "large: Android message");
+        check_eq(md::too_large_message("big.csv", 63200000, false), "big.csv is 63.2 MB and may take a long time and a lot of memory to display.", "large: desktop message");
+        check(md::max_file_bytes(true) == 1000000 && md::max_file_bytes(false) == 50000000, "large: per-platform limits");
+        check(md::is_plain_text_path("a/b/Data.CSV") && md::is_plain_text_path("x.tsv") && md::is_plain_text_path("x.log"), "plain: data extensions");
+        check(!md::is_plain_text_path("x.md") && !md::is_plain_text_path("x.org") && !md::is_plain_text_path("x.txt") && !md::is_plain_text_path("csv"), "plain: documents are not data");
+        const md::Document d = md::parse(md::plain_text_as_markdown("a,b\n1,2\n3,4"));
+        check(d.size() == 1 && d[0].kind == md::Block::Kind::Code, "plain: one code block");
+        check(d.size() == 1 && d[0].text.rfind("a,b\n1,2\n3,4", 0) == 0, "plain: the lines as they are");
+        const md::Document e = md::parse(md::plain_text_as_markdown("```\nnot a fence end\n```\n"));
+        check(e.size() == 1 && e[0].text.find("not a fence end") != std::string::npos, "plain: backquote runs do not end the block");
+    }
     std::printf(failures ? "%d FAILED\n" : "all passed\n", failures);
     return failures ? 1 : 0;
 }

@@ -9,6 +9,7 @@
 # cmake/deps.cmake) and linked statically; the exe only links the system's libc, libstdc++,
 # X11/GL. Downloads are cached in $CALLIGRUS_DOWNLOAD_DIR (default <BUILD_DIR>/_downloads).
 #   CALLIGRUS_USE_SYSTEM_LIBS=ON ./build.sh   -> use the distribution's libraries instead
+#   CALLIGRUS_COMPILER_LAUNCHER=sccache ./build.sh -> wrap the C/C++ compiler (CI uses this; unset by default)
 # Needs: a C/C++ compiler, cmake, ninja (or make), pkg-config (system libs only), network
 # access for the first configure, and the X11/GL dev packages GLFW builds against, e.g. on Ubuntu:
 #   sudo apt install build-essential cmake ninja-build pkg-config libx11-dev libxrandr-dev \
@@ -25,7 +26,11 @@ BUILD="${BUILD_DIR:-build}"
 [[ "$BUILD" = /* ]] || BUILD="$SRC/$BUILD"
 GEN=()
 command -v ninja >/dev/null && GEN=(-G Ninja)
-cmake -S "$SRC" -B "$BUILD" "${GEN[@]}" -DCMAKE_BUILD_TYPE="$CONFIG" \
+LAUNCH=()
+if [ -n "${CALLIGRUS_COMPILER_LAUNCHER:-}" ]; then
+    LAUNCH=(-DCMAKE_C_COMPILER_LAUNCHER="$CALLIGRUS_COMPILER_LAUNCHER" -DCMAKE_CXX_COMPILER_LAUNCHER="$CALLIGRUS_COMPILER_LAUNCHER")
+fi
+cmake -S "$SRC" -B "$BUILD" "${GEN[@]}" "${LAUNCH[@]}" -DCMAKE_BUILD_TYPE="$CONFIG" \
     -DCALLIGRUS_USE_SYSTEM_LIBS="${CALLIGRUS_USE_SYSTEM_LIBS:-OFF}"
 cmake --build "$BUILD" --parallel "${JOBS:-$(nproc)}"
 echo "Built: $BUILD/calligrus"

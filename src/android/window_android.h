@@ -8,6 +8,9 @@
 #pragma once
 
 #include <functional>
+#include <optional>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include <GLES3/gl3.h>
@@ -134,6 +137,10 @@ struct HScrollBlock {
     const void* key;
 };
 void set_hscroll_blocks(const std::vector<HScrollBlock>& blocks);
+// The tab strip's scrolling part (spec 35; empty rectangle: none). A finger that goes down on it also scrolls it sideways:
+// `h_key == tab_strip_key()` then, with `h_dx` as for a block; the finger's tap still clicks a tab.
+void set_tab_strip(float x0, float y0, float x1, float y1);
+const void* tab_strip_key();
 // The fling of a sideways scroll ran into an end of its block.
 void doc_touch_hit_end_h();
 // The fling ran into an end of the document.
@@ -152,6 +159,8 @@ void set_light_bars(bool light);
 // Power (spec 35). Called on the loop's thread when the app is going to the background (pause, stop, save state,
 // the window going away): write whatever is pending (config, state file).
 void set_background_hook(std::function<void()> hook);
+// A document read again from its source while a tab shows its older copy: (old path, new path), UTF-8. Main thread.
+std::optional<std::pair<std::string, std::string>> take_replacement();
 // Dev switch (file `power_legacy` in the app home): the loop as before pass 5 (16 ms polls, a frame every 0.5 s).
 bool legacy_power();
 // True once after a wait that ended for input, a job, a document or a window event (false: only its timer ran out).

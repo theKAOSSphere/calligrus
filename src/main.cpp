@@ -93,6 +93,29 @@ static void* native_window(GLFWwindow*) { return nullptr; }
 #include <stb_image.h>        // the window icon (implementation in images.cpp)
 #include <stb_image_write.h>  // implementation in debug_capture.cpp
 
+// With CALLIGRUS_TRACE set: the process's memory in MB (working set / private, or VmRSS on Linux) after a script
+// `echo` and when a tab is switched, to measure what a document costs. Nothing on Android.
+#if defined(_WIN32) || (defined(__linux__) && !defined(__ANDROID__))
+#ifdef _WIN32
+#define PSAPI_VERSION 2  // (GetProcessMemoryInfo from kernel32: no extra library)
+#include <psapi.h>
+#endif
+static void trace_memory(const char* what) {
+    if (!trace::enabled()) return;
+#ifdef _WIN32
+    PROCESS_MEMORY_COUNTERS_EX m{};
+    if (GetProcessMemoryInfo(GetCurrentProcess(), reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&m), sizeof m))
+        trace::log("memory (%s): working set %.1f MB, private %.1f MB", what, double(m.WorkingSetSize) / 1048576.0, double(m.PrivateUsage) / 1048576.0);
+#else
+    std::ifstream f("/proc/self/status");
+    for (std::string l; std::getline(f, l);)
+        if (l.rfind("VmRSS:", 0) == 0) trace::log("memory (%s): %s", what, l.c_str());
+#endif
+}
+#else
+static void trace_memory(const char*) {}
+#endif
+
 // Debugging aid: with CALLIGRUS_CAPTURE=<file.png> set, save the frame the app
 // itself rendered (straight from OpenGL, before Windows composites it) a few
 // frames after start-up, plus a <file.png>.txt note on sizes and how many
@@ -202,11 +225,14 @@ static std::string display_path(const fs::path& p) {
 // ---------------------------------------------------------------------------
 
 static bool g_script_mode = false;
-// Open (Ctrl+O, the toolbar) puts the file in a new tab, like Ctrl+T (spec 34); Android has no tabs yet, so it replaces.
-#ifdef __ANDROID__
-constexpr bool kOpenInNewTab = false;
-#else
+// Open (Ctrl+O, the toolbar) puts the file in a new tab, like Ctrl+T (spec 34). Android too (spec 35): the document that
+// the picker, "Open with" or a share hands over arrives like a dropped file and is also opened in a new tab there, while
+// a file dropped on a desktop window replaces the current tab's document.
 constexpr bool kOpenInNewTab = true;
+#ifdef __ANDROID__
+constexpr bool kDropInNewTab = true;
+#else
+constexpr bool kDropInNewTab = false;
 #endif
 static bool g_editor = false;  // --editor: live preview driven by an editor on stdin (spec 15)
 static fs::path g_script_log;
@@ -268,6 +294,38 @@ static void editor_emit(const std::string& json) {
         off += size_t(n);
     }
 #endif
+}
+
+// The crash-loop guard (spec 35, "Crash-loop guard"): `loading.marker` next to the state file names the document being loaded and
+// shown for the first time. It is written (and closed) before the load and removed once the document has been on screen for a few
+// seconds, or when the app goes to the background or exits. A start-up that finds it still there knows the last run died on that
+// document, and does not reopen its tab. Not used in script mode.
+static fs::path g_guard_file;
+static const double kGuardSeconds = 4.0;
+static std::string guard_take() {  // what the last run left behind ("" = nothing), and remove it
+    if (g_guard_file.empty()) return "";
+    std::string name;
+    {
+        std::ifstream in(g_guard_file, std::ios::binary);
+        if (in) std::getline(in, name);
+    }
+    std::error_code ec;
+    fs::remove(g_guard_file, ec);
+    while (!name.empty() && (name.back() == '\r' || name.back() == '\n')) name.pop_back();
+    return name;
+}
+static void guard_write(const fs::path& doc) {
+    if (g_guard_file.empty() || doc.empty()) return;
+    std::error_code ec;
+    const std::string name = to_utf8(fs::absolute(doc, ec));
+    std::ofstream out(g_guard_file, std::ios::binary | std::ios::trunc);
+    out << name << "\n";
+    out.flush();
+}
+static void guard_clear() {
+    if (g_guard_file.empty()) return;
+    std::error_code ec;
+    fs::remove(g_guard_file, ec);
 }
 
 // The state file is not written in script mode.
@@ -363,7 +421,11 @@ static ImGuiKey imgui_key_for(const script::KeyToken& k, bool& implied_shift) {
 
 struct DocState {
     fs::path path;  // empty => the built-in demo (or an editor document: see `live`)
+    bool stale_copy = false;  // Android: the tab shows its private copy because the original could not be read again (spec 35)
     std::string binary;  // not empty: the file is not text (what it looks like, see md::looks_binary): the view shows a note
+    std::string note;    // with `binary`: the note's own words (a file over the size limit); empty = the "not a text file" note
+    bool large_soft = false;  // with `binary == "too large"`: desktop, the note offers "Open anyway" (Android: a hard limit)
+    fs::path open_anyway;     // the file the user chose to open although it is over the limit (kept across reloads of it)
     md::Document doc;
     std::vector<int> pauses;  // slides: source lines of `<!-- pause -->` / `# pause` (spec 26)
     std::vector<int> ends;    // slides: source lines of `<!-- end_slide -->` (spec 26)
@@ -468,6 +530,8 @@ struct DocState {
         live_text = text;
         path.clear();
         binary.clear();
+        note.clear();
+        large_soft = false;
         error.clear();
         set_doc(md::parse_format(text, live_format));
         read_directives(text, live_format == "org");
@@ -515,20 +579,52 @@ struct DocState {
     }
 
     bool load(const fs::path& p) {
+        // A file over the limit is not even read: the note says so (laying it out would exhaust the memory; spec 3).
+        std::error_code size_ec;
+        const uintmax_t size = fs::file_size(p, size_ec);
+#ifdef __ANDROID__
+        constexpr bool android = true;
+#else
+        constexpr bool android = false;
+#endif
+        if (p != open_anyway) open_anyway.clear();
+        if (!size_ec && size > md::max_file_bytes(android) && p != open_anyway) {
+            if (p != path) stale_copy = false;
+            path = p;
+            live = live_open = false;
+            sync_line = 0, sync_pending = sync_reapply = false;
+            binary = "too large";
+            note = md::too_large_message(to_utf8(p.filename()), size, android);
+            large_soft = !android;
+            set_doc(md::Document{});
+            read_directives("", false);
+            std::error_code ec;
+            mtime = fs::last_write_time(p, ec);
+            error.clear();
+            return true;
+        }
         auto text = platform::read_file(p);
         if (!text) {
             error = "Could not read " + display_path(p);
             return false;
         }
+        if (p != path) stale_copy = false;
         path = p;
         live = live_open = false;
         sync_line = 0, sync_pending = sync_reapply = false;
         const char* not_text = md::looks_binary(*text);
         binary = not_text ? not_text : "";
+        note.clear();
+        large_soft = false;
         if (not_text) *text = "";  // nothing to show but the note
         const bool org = md::is_org_path(to_utf8(p));
-        set_doc(md::parse_format(*text, org ? "org" : "markdown"));
-        read_directives(*text, org);
+        if (md::is_plain_text_path(to_utf8(p)) && !not_text) {  // data (.csv...): the lines as they are, in a code block
+            set_doc(md::parse(md::plain_text_as_markdown(*text)));
+            read_directives("", false);
+        } else {
+            set_doc(md::parse_format(*text, org ? "org" : "markdown"));
+            read_directives(*text, org);
+        }
         std::error_code ec;
         mtime = fs::last_write_time(p, ec);
         error.clear();
@@ -797,6 +893,13 @@ struct UiState {
     float tab_scroll = 0;        // the tab bar's horizontal scroll (px; spec 34)
     size_t tab_seen = SIZE_MAX;  // the active tab / the number of tabs the bar last showed: when they change, keep the active tab visible
     size_t tab_seen_count = 0;
+    size_t tab_count = 1;        // Android: the number the toolbar's tabs button shows (set every frame)
+    bool tabs_request = false;   // Android: the tabs button was tapped: open the tab panel this frame
+    bool tab_strip = false;      // Android: the window is wide (a tablet held sideways): the tab strip replaces the tabs button and the panel
+    bool tabs_anchor_valid = false;  // Android: where the tab panel hangs (screen px; set by the toolbar every frame): under the tabs
+    ImVec2 tabs_anchor_max;          //   button, or the "more" button when that one went into the menu
+    int tabs_opened_frame = -1;      // the frame the panel was asked for (its opening tap must not count as a tap outside)
+    bool tabs_fresh = false;         // the panel was just opened: scroll the active tab into view
 };
 
 static void draw_recent_popup(DocState& st, UiState& ui, const Theme& theme, float scale);
@@ -804,10 +907,10 @@ static void draw_recent_popup(DocState& st, UiState& ui, const Theme& theme, flo
 // The toolbar's buttons, in drawing order. When the window is too narrow they move, the ones that stay
 // least long first, into the overflow menu behind the "more" button at the right end (spec 35: made for
 // phones; a desktop window gets it below kDesktopOverflowBelow px, so the usual window sizes are untouched).
-enum TbItem { kTbOpen, kTbRecent, kTbReload, kTbOutline, kTbSlides, kTbPdf, kTbSizes, kTbTheme, kTbSettings, kTbCount };
+enum TbItem { kTbOpen, kTbRecent, kTbReload, kTbOutline, kTbSlides, kTbPdf, kTbSizes, kTbTheme, kTbSettings, kTbTabs, kTbCount };
 // How long an item stays in the bar as the width shrinks (0 = last to go): Open, Outline, A- / A+, theme,
-// settings, theme, reload, recent files, then the desktop-only slides and PDF.
-static const int kTbRank[kTbCount] = {0, 6, 5, 1, 7, 8, 2, 4, 3};
+// settings, theme, reload, recent files, then the desktop-only slides and PDF. The tabs button is Android's only (spec 35).
+static const int kTbRank[kTbCount] = {0, 6, 5, 1, 7, 8, 2, 4, 3, 0};
 // The groups the separators divide: {Open .. PDF}, {A-, A+}, {theme, settings}.
 static int tb_group(int item) { return item <= kTbPdf ? 0 : item == kTbSizes ? 1 : 2; }
 static const float kDesktopOverflowBelow = 400.0f;
@@ -858,11 +961,15 @@ static void draw_toolbar(DocState& st, UiState& ui, ConfigFile& conf, const Them
     const float widths[kTbCount] = {tb_button_w("\xF0\x9F\x93\x82 Open\xE2\x80\xA6"), tb_button_w("   ##recent"), tb_button_w("\xE2\x9F\xB3"),
                                     tb_button_w("\xE2\x98\xB0 Outline"), tb_button_w("Slides"), tb_button_w("PDF"),
                                     tb_button_w("A\xE2\x88\x92") + gap + tb_button_w("A+"), theme_combo_width(cfg, themes, scale),
-                                    tb_button_w("\xE2\x9A\x99")};
+                                    tb_button_w("\xE2\x9A\x99"), tb_button_w("      ##tabs")};
     bool present[kTbCount];
     for (bool& p : present) p = true;
 #ifdef __ANDROID__  // (slides and PDF export are desktop-only for now: spec 35)
     present[kTbSlides] = present[kTbPdf] = false;
+    present[kTbTabs] = !ui.tab_strip;  // (a wide window has the tab strip instead of the button)
+    ui.tabs_anchor_valid = false;
+#else
+    present[kTbTabs] = false;  // (the desktop has the tab bar instead)
 #endif
     auto needed = [&](const bool* on) {
         float w = 0;
@@ -1005,6 +1112,20 @@ static void draw_toolbar(DocState& st, UiState& ui, ConfigFile& conf, const Them
         if (ImGui::Button("\xE2\x9A\x99")) ui.settings_open = !ui.settings_open;  // a plain button in the Rust port too (no "on" look)  // "⚙"
         tooltip("Settings");
     }
+    if (shown[kTbTabs]) {  // Android: a browser-style button with the number of open tabs; it opens the tab list (spec 35)
+        start(kTbTabs);
+        if (ImGui::Button("      ##tabs")) ui.tabs_request = true;
+        const ImVec2 a = ImGui::GetItemRectMin(), b = ImGui::GetItemRectMax();
+        ui.tabs_anchor_valid = true, ui.tabs_anchor_max = b;
+        const float side = std::round(ImGui::GetFrameHeight() * 0.66f), cx = (a.x + b.x) * 0.5f, cy = (a.y + b.y) * 0.5f;
+        const ImU32 col = ImGui::GetColorU32(ImGuiCol_Text);
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        dl->AddRect(ImVec2(cx - side * 0.5f, cy - side * 0.5f), ImVec2(cx + side * 0.5f, cy + side * 0.5f), col, 3.0f * scale, 0, std::max(1.0f, std::round(1.5f * scale)));
+        const std::string num = ui.tab_count > 99 ? ":)" : std::to_string(ui.tab_count);
+        const float fs = side * (ui.tab_count > 9 ? 0.64f : 0.80f);  // (the number fills the square: it must read at phone size)
+        const ImVec2 ts = ImGui::GetFont()->CalcTextSizeA(fs, FLT_MAX, 0.0f, num.c_str());
+        dl->AddText(ImGui::GetFont(), fs, ImVec2(std::round(cx - ts.x * 0.5f), std::round(cy - ts.y * 0.5f)), col, num.c_str());
+    }
 
     // The file name, with whatever room is left (all of it on a window wide enough). With the "more" button (a phone) the
     // bar has no name: it is the first line of the menu instead (spec 35).
@@ -1049,6 +1170,7 @@ static void draw_toolbar(DocState& st, UiState& ui, ConfigFile& conf, const Them
     ImGui::SameLine(more_x);
     if (ImGui::Button("    ##more")) ImGui::OpenPopup("##overflow");
     const ImVec2 mb_min = ImGui::GetItemRectMin(), mb_max = ImGui::GetItemRectMax();
+    if (!ui.tabs_anchor_valid) ui.tabs_anchor_valid = true, ui.tabs_anchor_max = mb_max;  // (the panel hangs under this button when the tabs button is in the menu)
     {
         const ImVec2 c((mb_min.x + mb_max.x) * 0.5f, (mb_min.y + mb_max.y) * 0.5f);
         const float r = 1.6f * scale, step = 5.0f * scale;
@@ -1081,6 +1203,7 @@ static void draw_toolbar(DocState& st, UiState& ui, ConfigFile& conf, const Them
         if (item(kTbReload, "Reload")) st.reload();
         if (item(kTbRecent, "Recent files\xE2\x80\xA6")) ui.open_recent = true;
         if (item(kTbSettings, "Settings", ui.settings_open)) ui.settings_open = !ui.settings_open;
+        if (item(kTbTabs, ("Tabs (" + std::to_string(ui.tab_count) + ")\xE2\x80\xA6").c_str())) ui.tabs_request = true;
         if (item(kTbSlides, "Slides")) ui.slides_request = true;
         if (!shown[kTbPdf] && present[kTbPdf]) {
             ImGui::BeginDisabled(!ui.can_export);
@@ -1169,24 +1292,32 @@ static std::string tab_name(const std::string& file_name) {
 struct TabLabel {
     std::string name;  // as shown
     std::string tip;   // the full path
+    std::string full;  // the whole file name (the Android list; empty for the demo)
+    bool is_demo = false;
 };
 
 // What the bar asked for this frame: switch to a tab, close a tab (-1: nothing).
 struct TabBarResult {
     int switch_to = -1;
     int close = -1;
+    bool add = false;  // the touch strip's "+": the file picker, into a new tab (Android only)
 };
 
 // The row under the toolbar, drawn at `top` (screen y) and `row_h` tall: one egui-like selectable
 // label per tab (no background unless hovered or active) with an "×" on the active one and on the one
 // under the pointer. A row wider than the window scrolls with the wheel, and keeps the active tab in view.
+// `touch` (Android, a wide window, spec 35): the same row for fingers: tabs `row_h - 2 * pad_y` tall, an "x" box of 48 dp on every tab,
+// a "+" box pinned at the right end, a tap (not a press) is a click, and the row scrolls sideways with a finger.
 static TabBarResult draw_tab_bar(const std::vector<TabLabel>& tabs, size_t active, UiState& ui, const Theme& theme, const Fonts& fonts, float top,
-                                 float row_h, float pad_x, float pad_y, float scale) {
+                                 float row_h, float pad_x, float pad_y, float scale, bool touch = false) {
     TabBarResult res;
     const ImGuiViewport* vp = ImGui::GetMainViewport();
     ImDrawList* dl = ImGui::GetWindowDrawList();
     const ImGuiStyle& style = ImGui::GetStyle();
-    const float h = ImGui::GetFrameHeight(), gap = 2.0f * scale, between = 4.0f * scale;
+    const float h = touch ? row_h - 2 * pad_y : ImGui::GetFrameHeight(), gap = (touch ? 4.0f : 2.0f) * scale, between = 4.0f * scale;
+    const float xbox = std::round(48.0f * scale), text_pad = touch ? std::round(12.0f * scale) : style.FramePadding.x;  // (touch: the "x" box and the name's inset)
+    const float plus_w = touch ? xbox : 0.0f;  // (touch: the pinned "+" box)
+    const float area_x = touch ? ImGui::GetWindowPos().x : vp->WorkPos.x, area_w = touch ? ImGui::GetWindowWidth() : vp->WorkSize.x;  // (Android: inside the system bars)
     const char* cross = "\xC3\x97";  // "×"
     // The labels are measured and drawn with the document font's exact advances, like egui (the UI font's
     // are whole pixels: a name came out 1 to 2 px wider or narrower, so every tab after it sat off).
@@ -1217,15 +1348,29 @@ static TabBarResult draw_tab_bar(const std::vector<TabLabel>& tabs, size_t activ
     for (const Label& label : labels) {
         x0.push_back(total);
         // (a whole number of points, as egui sizes the tab: ceil of padding + name + gap + x + padding)
-        w.push_back(std::ceil((style.FramePadding.x + label.width + between + cross_w + style.FramePadding.x) / scale) * scale);
+        w.push_back(touch ? std::ceil((text_pad + label.width + between) / scale) * scale + xbox
+                          : std::ceil((style.FramePadding.x + label.width + between + cross_w + style.FramePadding.x) / scale) * scale);
         total += w.back() + gap;
     }
     total -= gap;
-    const float view_x = vp->WorkPos.x + pad_x, view_w = vp->WorkSize.x - 2 * pad_x;
+    const float view_x = area_x + pad_x, view_w = area_w - 2 * pad_x - (touch ? plus_w + gap : 0.0f);
     const float max_scroll = std::max(0.0f, total - view_w);
-    const ImVec2 row_min(vp->WorkPos.x, top), row_max(vp->WorkPos.x + vp->WorkSize.x, top + row_h);
+    const ImVec2 row_min(area_x, top), row_max(area_x + area_w, top + row_h);
     if (ImGui::IsMouseHoveringRect(row_min, row_max) && ImGui::GetIO().MouseWheel != 0 && !ImGui::GetIO().KeyCtrl)
         ui.tab_scroll -= ImGui::GetIO().MouseWheel * 48.0f * scale;
+#ifdef __ANDROID__
+    if (touch) {  // a finger drags the row sideways (and flings it); not under a popup or the settings window, which own the fingers
+        const bool covered = ui.settings_open || ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel);
+        if (covered) android_shell::set_tab_strip(0, 0, 0, 0);
+        else android_shell::set_tab_strip(view_x, top, view_x + view_w, top + row_h);
+        const android_shell::DocTouch t = android_shell::doc_touch();
+        if (t.h_key == android_shell::tab_strip_key() && t.h_dx != 0) {
+            const float to = ui.tab_scroll - t.h_dx;
+            if (to < 0 || to > max_scroll) android_shell::doc_touch_hit_end_h();  // a fling stops at the ends
+            ui.tab_scroll = to;
+        }
+    }
+#endif
     if (ui.tab_seen != active || ui.tab_seen_count != tabs.size()) {  // another tab is active: show it whole
         ui.tab_seen = active, ui.tab_seen_count = tabs.size();
         if (x0[active] < ui.tab_scroll) ui.tab_scroll = x0[active];
@@ -1239,6 +1384,25 @@ static TabBarResult draw_tab_bar(const std::vector<TabLabel>& tabs, size_t activ
         const float x = std::round(view_x + x0[i] - ui.tab_scroll);
         ImGui::SetCursorScreenPos(ImVec2(x, y));
         ImGui::PushID(int(i));
+        if (touch) {  // the name's box and the "x" box are two targets, a tap on either clicks on release (a drag does not)
+            const bool body_hit = ImGui::InvisibleButton("##tab", ImVec2(w[i] - xbox, h));
+            const bool body_down = ImGui::IsItemActive();
+            ImGui::SetCursorScreenPos(ImVec2(x + w[i] - xbox, y));
+            const bool cross_hit = ImGui::InvisibleButton("##close", ImVec2(xbox, h));
+            const bool cross_down = ImGui::IsItemActive();
+            const bool is_active = i == active;
+            if (is_active) dl->AddRectFilled(ImVec2(x, y), ImVec2(x + w[i], y + h), theme.ui.selection, style.FrameRounding);
+            else if (body_down || cross_down) dl->AddRectFilled(ImVec2(x, y), ImVec2(x + w[i], y + h), theme.ui.widget_hover, style.FrameRounding);
+            draw_label(labels[i], ImVec2(x + text_pad, y + std::round((h - size) * 0.5f)), is_active ? theme.ui.selection_text : theme.ui.text);
+            const float cx = x + w[i] - xbox * 0.5f, cy = y + h * 0.5f, r = 5.0f * scale, th = std::max(1.5f, 1.6f * scale);
+            const ImU32 xc = cross_down ? theme.ui.text : (is_active ? theme.ui.selection_text : theme.weak);
+            dl->AddLine(ImVec2(cx - r, cy - r), ImVec2(cx + r, cy + r), xc, th);
+            dl->AddLine(ImVec2(cx - r, cy + r), ImVec2(cx + r, cy - r), xc, th);
+            if (cross_hit) res.close = int(i);
+            else if (body_hit) res.switch_to = int(i);
+            ImGui::PopID();
+            continue;
+        }
         ImGui::InvisibleButton("##tab", ImVec2(w[i], h));
         const bool hovered = ImGui::IsItemHovered();
         const bool is_active = i == active;
@@ -1261,8 +1425,161 @@ static TabBarResult draw_tab_bar(const std::vector<TabLabel>& tabs, size_t activ
         ImGui::PopID();
     }
     ImGui::PopClipRect();
+    if (touch) {  // the "+" box, pinned at the right end
+        const float px = std::round(area_x + area_w - pad_x - plus_w), py = top + pad_y;
+        ImGui::SetCursorScreenPos(ImVec2(px, py));
+        res.add = ImGui::InvisibleButton("##tabnew", ImVec2(plus_w, h));
+        if (ImGui::IsItemActive()) dl->AddRectFilled(ImVec2(px, py), ImVec2(px + plus_w, py + h), theme.ui.widget_hover, style.FrameRounding);
+        const float cx = px + plus_w * 0.5f, cy = py + h * 0.5f, r = 7.0f * scale, th = std::max(1.5f, 1.6f * scale);
+        dl->AddLine(ImVec2(cx - r, cy), ImVec2(cx + r, cy), theme.ui.text, th);
+        dl->AddLine(ImVec2(cx, cy - r), ImVec2(cx, cy + r), theme.ui.text, th);
+    }
     return res;
 }
+
+#ifdef __ANDROID__
+// What the Android tab panel asked for this frame.
+struct TabListResult {
+    int switch_to = -1;
+    int close = -1;
+    bool add = false;  // "New": the file picker, into a new tab
+};
+
+// Android's tab panel (spec 35): a drop-down under the toolbar's tabs button (under the "more" button when that one holds the tabs
+// entry), right-aligned to it, opened by it. A "New tab" row that stays put, then one 52 dp row per tab: the file name (shortened
+// in the middle), the active tab filled with the selection colour, and a 52 dp "x" box on the right, set off by a faint rule so
+// that neither target is hit by mistake. The panel is `min(window - 16 dp, 360 dp)` wide and as tall as its rows, up to 60 % of the
+// window (and never past the bottom edge); more rows scroll by finger like the other lists. It is a modal: a tap outside closes
+// it (and goes no further), and so does the Back key. `pos` / `size` is the area inside the system bars.
+static TabListResult draw_tab_panel(const std::vector<TabLabel>& tabs, size_t active, UiState& ui, const Theme& theme, const Fonts& fonts, ImVec2 pos,
+                                    ImVec2 size, float scale) {
+    TabListResult res;
+    if (ui.tabs_request) {
+        ui.tabs_request = false;
+        if (!ui.tab_strip) {  // (a wide window has the strip: nothing to open)
+            ImGui::OpenPopup("##tablist");
+            ui.tabs_opened_frame = ImGui::GetFrameCount();
+            ui.tabs_fresh = true;
+        }
+    }
+    const float margin = std::round(8.0f * scale), pad = std::round(4.0f * scale);
+    const float row_h = std::round(52.0f * scale), x_w = row_h;  // (every row and the "x" box are at least 48 dp)
+    const float panel_w = std::max(std::min(size.x - 2 * margin, std::round(360.0f * scale)), std::min(size.x, std::round(160.0f * scale)));
+    const float side = std::min(margin, std::max(0.0f, (size.x - panel_w) * 0.5f));  // (the gap to the window edge, less when the window is tiny)
+    const float chrome = 2 * pad + row_h + std::round(1.0f * scale);  // padding, the "New tab" row and its rule
+    // Right-aligned to the button; when that would put the panel's left edge past the margin (a phone), it hangs from the right margin instead.
+    float right = ui.tabs_anchor_valid ? ui.tabs_anchor_max.x : pos.x + size.x - margin;
+    if (right - panel_w < pos.x + side) right = pos.x + size.x - side;
+    right = std::min(right, pos.x + size.x - side);
+    const float top = std::max(ui.tabs_anchor_valid ? ui.tabs_anchor_max.y + std::round(4.0f * scale) : pos.y, pos.y);
+    const float room_below = std::max(0.0f, pos.y + size.y - margin - top);  // down to the bottom margin (inside the gesture area)
+    const float max_h = std::min(0.6f * size.y, room_below);
+    float list_h = float(tabs.size()) * row_h;
+    if (list_h > max_h - chrome) {  // too many: whole rows and half of the next one, so that the cut shows it scrolls
+        const float fit = std::max(0.0f, max_h - chrome);
+        list_h = fit >= 2.5f * row_h ? (std::floor(fit / row_h - 0.5f) + 0.5f) * row_h : fit;
+    }
+    ImGui::SetNextWindowPos(ImVec2(right - panel_w, top));
+    ImGui::SetNextWindowSize(ImVec2(panel_w, chrome + list_h));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(pad, pad));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
+    const bool open = ImGui::BeginPopupModal("##tablist", nullptr,
+                                             ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings |
+                                                 ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    ImGui::PopStyleVar(2);
+    shell::set_back_wanted(open);  // (the Back key closes the panel while it is open: spec 35)
+    if (!open) return res;
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));  // (rows touch: each has its own 52 dp)
+    const ImVec2 wp = ImGui::GetWindowPos(), wsz = ImGui::GetWindowSize();
+    const ImGuiIO& io = ImGui::GetIO();
+    const auto outside = [&](ImVec2 p) { return p.x < wp.x || p.y < wp.y || p.x >= wp.x + wsz.x || p.y >= wp.y + wsz.y; };
+    // (a finger that dragged away leaves the pointer off-screen: no tap)
+    const bool tap_outside = ImGui::IsMouseReleased(ImGuiMouseButton_Left) && ImGui::GetFrameCount() != ui.tabs_opened_frame && io.MousePos.x > -1e5f &&
+                             outside(io.MousePos) && outside(io.MouseClickedPos[0]);
+    if (ui.tab_strip || tap_outside || shell::take_back()) {  // (a turn to a wide window: the strip takes over)
+        ImGui::CloseCurrentPopup();
+        ImGui::PopStyleVar();
+        ImGui::EndPopup();
+        return res;
+    }
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const float em = 16.0f * scale;
+    const float name_size = fonts.px(fonts.regular, em), name_adv = fonts.advance_scale(fonts.regular, em);
+    const ImU32 rule = ImGui::GetColorU32(ImGuiCol_Separator);
+    const float round_r = std::round(6.0f * scale), text_pad = std::round(12.0f * scale), line = std::max(1.0f, std::round(1.0f * scale));
+    const float inner_w = ImGui::GetContentRegionAvail().x;
+    {  // "New tab": the file picker, its answer is a new tab
+        const ImVec2 o = ImGui::GetCursorScreenPos();
+        const bool hit = ImGui::InvisibleButton("##tabnew", ImVec2(inner_w, row_h));
+        if (ImGui::IsItemActive()) dl->AddRectFilled(o, ImVec2(o.x + inner_w, o.y + row_h), theme.ui.widget_hover, round_r);
+        const float cx = o.x + text_pad + 8.0f * scale, cy = o.y + row_h * 0.5f, r = 7.0f * scale, th = std::max(1.5f, 1.6f * scale);
+        dl->AddLine(ImVec2(cx - r, cy), ImVec2(cx + r, cy), theme.ui.text, th);
+        dl->AddLine(ImVec2(cx, cy - r), ImVec2(cx, cy + r), theme.ui.text, th);
+        draw_text(dl, fonts.regular, name_size, name_adv, ImVec2(o.x + text_pad + 28.0f * scale, o.y + (row_h - name_size) * 0.5f), theme.ui.text, "New tab");
+        if (hit) {
+            res.add = true;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::Dummy(ImVec2(inner_w, std::round(1.0f * scale)));
+        dl->AddRectFilled(ImVec2(o.x, o.y + row_h), ImVec2(o.x + inner_w, o.y + row_h + line), rule);
+    }
+    ImGui::BeginChild("##tabrows", ImVec2(inner_w, list_h), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar);
+    if (ui.tabs_fresh) {  // just opened: the active tab in view (centred when the list scrolls)
+        ui.tabs_fresh = false;
+        const float max_scroll = std::max(0.0f, float(tabs.size()) * row_h - list_h);
+        ImGui::SetScrollY(std::clamp(float(active) * row_h - (list_h - row_h) * 0.5f, 0.0f, max_scroll));
+    }
+    ImDrawList* cdl = ImGui::GetWindowDrawList();
+    const float w = ImGui::GetWindowWidth();
+    for (size_t i = 0; i < tabs.size(); i++) {
+        ImGui::PushID(int(i));
+        const ImVec2 o = ImGui::GetCursorScreenPos();
+        const bool is_active = i == active;
+        const bool row_hit = ImGui::InvisibleButton("##row", ImVec2(w - x_w, row_h));
+        const bool row_down = ImGui::IsItemActive();
+        ImGui::SameLine(0, 0);
+        const bool close_hit = ImGui::InvisibleButton("##close", ImVec2(x_w, row_h));
+        const bool close_down = ImGui::IsItemActive();
+        if (is_active) cdl->AddRectFilled(o, ImVec2(o.x + w, o.y + row_h), theme.ui.selection, round_r);
+        else if (row_down || close_down) cdl->AddRectFilled(o, ImVec2(o.x + w, o.y + row_h), theme.ui.widget_hover, round_r);
+        const ImU32 text_col = is_active ? theme.ui.selection_text : theme.ui.text;
+        const float room = w - x_w - 2 * text_pad;
+        auto name_w = [&](const std::string& t) { return text_width(fonts.regular, name_size, name_adv, t); };
+        std::string shown_name = name_w(tabs[i].full) <= room ? tabs[i].full : elide_middle(tabs[i].full, room, name_w);
+        if (shown_name.empty()) shown_name = tabs[i].full;
+        draw_text(cdl, fonts.regular, name_size, name_adv, ImVec2(o.x + text_pad, o.y + (row_h - name_size) * 0.5f), text_col, shown_name);
+        // a faint rule before the "x" box, so the two targets read as two
+        cdl->AddRectFilled(ImVec2(o.x + w - x_w, o.y + row_h * 0.25f), ImVec2(o.x + w - x_w + line, o.y + row_h * 0.75f), is_active ? theme.ui.selection_text : rule);
+        {  // the "x": two strokes, centred in its box
+            const float cx = o.x + w - x_w * 0.5f, cy = o.y + row_h * 0.5f, r = 6.0f * scale, th = std::max(1.5f, 2.0f * scale);
+            const ImU32 xc = close_down ? ImGui::GetColorU32(ImGuiCol_Text) : (is_active ? theme.ui.selection_text : theme.weak);
+            cdl->AddLine(ImVec2(cx - r, cy - r), ImVec2(cx + r, cy + r), xc, th);
+            cdl->AddLine(ImVec2(cx - r, cy + r), ImVec2(cx + r, cy - r), xc, th);
+        }
+        if (close_hit) {
+            res.close = int(i);
+            if (tabs.size() == 1) ImGui::CloseCurrentPopup();  // (the last tab goes: the panel has nothing to show)
+        } else if (row_hit) {
+            res.switch_to = int(i);
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::PopID();
+    }
+    {  // where the list is: a thin bar at the right edge while it can scroll
+        const float max_scroll = ImGui::GetScrollMaxY();
+        if (max_scroll > 0) {
+            const ImVec2 cp = ImGui::GetWindowPos();
+            const float h = ImGui::GetWindowHeight(), bar_h = std::max(std::round(28.0f * scale), h * h / (h + max_scroll));
+            const float y = cp.y + ImGui::GetScrollY() / max_scroll * (h - bar_h), bw = std::max(2.0f, std::round(3.0f * scale));
+            cdl->AddRectFilled(ImVec2(cp.x + w - bw - 2.0f * scale, y), ImVec2(cp.x + w - 2.0f * scale, y + bar_h), ImGui::GetColorU32(ImGuiCol_TextDisabled), bw * 0.5f);
+        }
+    }
+    ImGui::EndChild();
+    ImGui::PopStyleVar();
+    ImGui::EndPopup();
+    return res;
+}
+#endif
 
 // ---------------------------------------------------------------------------
 // Outline panel
@@ -1480,6 +1797,10 @@ static std::vector<Run> layout_all(DocState& st, const Fonts& fonts, const Theme
     RenderResult r = render_document(scratch, st.doc, fonts, theme, ImVec2(0, 0), col_w, st.cache, st.version, -1e9f, 1e9f,
                                      base_dir(st), col, std::nullopt, 0, opts);
     if (height) *height = r.height;
+    // The scratch list now holds a vertex and an index for every glyph of the whole document (tens of MB for a long
+    // one) that nothing will draw: give the memory back instead of keeping it for the rest of the run.
+    scratch->VtxBuffer.clear();
+    scratch->IdxBuffer.clear();
     return std::move(col.runs);
 }
 
@@ -2028,8 +2349,8 @@ static std::string sync_dump(DocState& st, const Fonts& fonts, const Theme& them
 }
 
 // The note shown for a file that is not text (see md::looks_binary), centred near the top.
-static void draw_binary_note(const DocState& st, const Theme& theme, float scale) {
-    const std::string msg = md::binary_message(to_utf8(st.path.filename()), st.binary);
+static void draw_binary_note(DocState& st, const Theme& theme, float scale) {
+    const std::string msg = st.note.empty() ? md::binary_message(to_utf8(st.path.filename()), st.binary) : st.note;
     const float w = std::min(ImGui::GetWindowWidth() - 40.0f * scale, 560.0f * scale);
     const float x = (ImGui::GetWindowWidth() - w) / 2;
     ImGui::SetCursorPos(ImVec2(x, 40.0f * scale));
@@ -2039,6 +2360,20 @@ static void draw_binary_note(const DocState& st, const Theme& theme, float scale
     ImGui::PopTextWrapPos();
     ImGui::PopStyleColor();
     ImGui::SetCursorPos(ImVec2(x, ImGui::GetCursorPosY() + 12.0f * scale));
+    if (st.binary == "too large" && st.large_soft) {
+        if (ImGui::Button("Open anyway")) {
+            st.open_anyway = st.path;
+            try {
+                st.reload();
+            } catch (const std::bad_alloc&) {  // the file really is too big for this machine: back to the note
+                st.open_anyway.clear();
+                st.reload();
+                st.error = "Not enough memory to open " + to_utf8(st.path.filename());
+            }
+            return;
+        }
+        ImGui::SameLine();
+    }
     if (ImGui::Button("Open with default app")) platform::open_path(st.path);
 }
 
@@ -2930,7 +3265,7 @@ struct PresenterWindow {
     GLFWwindow* win = nullptr;
     ImGuiContext* ctx = nullptr;
 };
-static std::string g_dropped;  // UTF-8 path of a file dropped on the window
+static std::vector<std::string> g_dropped;  // UTF-8 paths of the files dropped on the window, not yet opened
 
 static void install_input_callbacks(GLFWwindow* w) {
     // Installed BEFORE ImGui's backend, which chains to these.
@@ -2949,7 +3284,7 @@ static void install_input_callbacks(GLFWwindow* w) {
 #endif
     glfwSetWindowRefreshCallback(w, [](GLFWwindow*) { g_input = true; });
     glfwSetDropCallback(w, [](GLFWwindow*, int n, const char** paths) {
-        if (n > 0) g_dropped = paths[0];
+        if (n > 0) g_dropped.push_back(paths[0]);
         g_input = true;
     });
 }
@@ -3279,6 +3614,11 @@ int main() {
     // The state file (window geometry, scroll positions): separate from config.toml. Never blocks start-up.
     const fs::path state_file = session::state_path();
     session::State state = session::load_state(state_file);
+    if (!g_script_mode) g_guard_file = state_file.parent_path() / "loading.marker";
+    const std::string crashed_on = guard_take();  // the document the last run died on, if it did (spec 35)
+    fs::path guard_doc;     // the document the marker names now
+    bool guard_live = false;  // the marker is there
+    double guard_since = -1;  // when the first frame of the loop saw it (-1: not yet)
     session::WindowRect normal_rect{0, 0, 1100, 800, false};  // the last non-maximized, non-fullscreen outer rect
     int normal_frame_l = 0, normal_frame_t = 0;               // its title-bar / border sizes (outer -> client)
     bool want_maximized = false;
@@ -3377,7 +3717,13 @@ int main() {
         auto demo = resource("demo.md");
         st.set_doc(md::parse(demo ? *demo : std::string_view(kSample)));
     };
-    const bool restore_tabs = cli_files.empty() && !g_editor && state.tabs.size() >= 2;  // (spec 34: reopen the saved tabs)
+    #ifdef __ANDROID__
+    state.keep_single_tab = true;  // (a killed process comes back to its document: spec 35)
+    const size_t min_restore = 1;
+#else
+    const size_t min_restore = 2;
+#endif
+    const bool restore_tabs = cli_files.empty() && !g_editor && state.tabs.size() >= min_restore;  // (spec 34: reopen the saved tabs)
     if (g_editor) {
         st.set_doc(md::parse("*Waiting for the editor\xE2\x80\xA6*"));
     } else if (st.path.empty() && !restore_tabs) {
@@ -3596,6 +3942,13 @@ int main() {
         remember_scroll();
         for_waiting([&](Tab& t) { remember_scroll_of(t.st, t.slides); });
         sync_state_tabs();
+#ifdef __ANDROID__  // (the app keeps the newest private copies only: the open tabs' count as new)
+        for (const std::string& t : state.tabs) {
+            const fs::path dir = fs::path(std::u8string(t.begin(), t.end())).parent_path();
+            std::error_code ec;
+            if (dir.parent_path().filename() == "opened") fs::last_write_time(dir, fs::file_time_type::clock::now(), ec);
+        }
+#endif
         if (tracked) {
             normal_rect.maximized = fullscreen ? fs_was_maximized : (glfwGetWindowAttrib(window, GLFW_MAXIMIZED) != 0);
             state.window = normal_rect;
@@ -3608,6 +3961,7 @@ int main() {
         trace::log("background: writing %zu pending config keys and the state file", conf.pending.size());
         conf.flush(glfwGetTime(), true);
         save_state_file();
+        guard_clear(); guard_since = -1; guard_live = false;  // (a document the app is leaving alive is not a crash suspect)
     });
 #endif
     // Show `p` (a new file, or the same one with an anchor / scroll position).
@@ -3663,6 +4017,14 @@ int main() {
     };
     auto close_tab = [&](size_t i) {
         if (g_editor || i >= tabs.size()) return;
+#ifdef __ANDROID__  // the closed tab's source need not stay readable (unless another tab shows the same one): spec 35
+        if (!tab_doc(i).path.empty()) {
+            std::string list = to_utf8(tab_doc(i).path) + "\n";
+            for (size_t k = 0; k < tabs.size(); k++)
+                if (k != i && !tab_doc(k).path.empty()) list += to_utf8(tab_doc(k).path) + "\n";
+            shell::release_source(list);
+        }
+#endif
         if (tabs.size() == 1) {  // the last one: an empty window showing the demo, as without a file
             remember_scroll();
             st = DocState();
@@ -3690,6 +4052,20 @@ int main() {
         sync_state_tabs();
         save_state_guarded(state_file, state, conf.cfg.remember_window);
     };
+#ifdef __ANDROID__
+    // The document of tab `i` becomes the file `to` (the same document read again from its source), keeping the place in it.
+    auto replace_tab_doc = [&](size_t i, const fs::path& to) {
+        DocState& d = i == active_tab ? st : tabs[i]->st;
+        const float at = (d.restore_y >= 0 ? d.restore_y : d.scroll_target);
+        if (!d.load(to)) return;
+        d.stale_copy = false;  // (read from the source again: the note goes)
+        d.restore_y = at;
+        if (i == active_tab) sys_check = true;
+        extra_frames = std::max(extra_frames, 3);
+        sync_state_tabs();
+        save_state_guarded(state_file, state, conf.cfg.remember_window);
+    };
+#endif
     // Next / previous tab, `n` steps, wrapping.
     auto step_tab = [&](int n) {
         const int count = int(tabs.size());
@@ -3722,6 +4098,7 @@ int main() {
         navigate(p, anchor, true, std::nullopt);
     };
     // Start-up (spec 34): the other files of the command line, or the tabs of the last run, in tabs of their own.
+    std::string skipped_crashed;  // a restored tab the crash-loop guard left out (its file name)
     {
         std::vector<fs::path> more;
         size_t first_tab = 0;
@@ -3731,9 +4108,14 @@ int main() {
                 const fs::path p(std::u8string(state.tabs[i].begin(), state.tabs[i].end()));
                 std::error_code gone;
                 if (!fs::is_regular_file(p, gone)) continue;  // (gone: skipped)
+                if (!crashed_on.empty() && state.tabs[i] == crashed_on) {  // the last run died on this one: not again (it leaves the tab list)
+                    skipped_crashed = to_utf8(p.filename());
+                    continue;
+                }
                 if (i + 1 == state.active_tab) first_tab = reopen.size();
                 reopen.push_back(p);
             }
+            if (!reopen.empty()) guard_write(reopen[0]), guard_doc = reopen[0], guard_live = !g_guard_file.empty();
             if (!reopen.empty() && st.load(reopen[0])) {
                 if (auto off = state.lookup(reopen[0])) st.restore_y = float(*off) * fonts.scale;
                 more.assign(reopen.begin() + 1, reopen.end());
@@ -3744,9 +4126,22 @@ int main() {
             more.assign(cli_files.begin() + 1, cli_files.end());
         }
         const auto recent = state.recent;  // (reopening is not opening: the list keeps its order)
-        for (const fs::path& p : more) open_file(p, "", true);
+        for (const fs::path& p : more) {
+            if (restore_tabs) guard_write(p), guard_doc = p, guard_live = !g_guard_file.empty();
+            open_file(p, "", true);
+        }
         if (restore_tabs) state.recent = recent;
         switch_tab(first_tab);
+        if (!skipped_crashed.empty())
+            st.error = skipped_crashed + " was not reopened because it crashed the app last time";  // (the error row: stays until dismissed)
+#ifdef __ANDROID__  // the restored copies are as they were; Java re-reads the originals it may still read (spec 35)
+        if (restore_tabs) {
+            std::string list;
+            for (size_t i = 0; i < tabs.size(); i++)
+                if (!tab_doc(i).path.empty()) list += to_utf8(tab_doc(i).path) + "\n";
+            shell::refresh_sources(list);
+        }
+#endif
     }
     // ----- marks (spec 28; as main.rs) -----
     auto toast = [&](std::string text) { st.toast = std::move(text), st.toast_since = ImGui::GetTime(); };
@@ -4246,7 +4641,7 @@ int main() {
                 if (!exporting) script_log("shot " + c.text + " " + std::to_string(w) + "x" + std::to_string(h));
                 return true;
             }
-            case Kind::Echo: script_log(c.text); return true;
+            case Kind::Echo: script_log(c.text), trace_memory(c.text.c_str()); return true;
             case Kind::SyncDump: {
                 const fs::path file = (script_out.empty() ? script_dir : script_out) / fs::path(std::u8string(c.text.begin(), c.text.end()));
                 std::error_code e;
@@ -4372,6 +4767,7 @@ int main() {
             if (!conf.pending.empty()) soon(conf.due - t_now, false);                             // the debounced config write
             if (st.bar_wake > 0) soon(st.bar_wake - ImGui::GetTime(), true);                      // the scrollbar goes
             if (!st.toast.empty()) soon(st.toast_since + 1.6 - ImGui::GetTime(), true);          // the toast goes
+            if (guard_since >= 0) soon(guard_since + kGuardSeconds - t_now, true);                 // the crash-loop marker goes
             if (find.due > 0) soon(find.due - ImGui::GetTime(), true);                            // a find search waiting for the typing to stop
             if (quiet_until > t_now) soon(0.2, true);                                             // hover delays, tooltips, widget fades settle
             if (io.WantTextInput) soon(0.5, true);                                                // the caret blinks
@@ -4409,6 +4805,14 @@ int main() {
             }
         }
 #endif
+        if (!g_guard_file.empty()) {  // crash-loop guard: the document about to be drawn for the first time is named in the marker
+            if (!st.path.empty() && st.path != guard_doc) {
+                guard_write(st.path), guard_doc = st.path, guard_live = true, guard_since = now;
+            } else if (guard_live) {
+                if (guard_since < 0) guard_since = now;
+                else if (now - guard_since >= kGuardSeconds && fonts_ready) guard_clear(), guard_live = false, guard_since = -1;
+            }
+        }
         if (g_editor && !g_script_mode) {
             std::deque<std::string> lines;
             bool eof = false;
@@ -4432,9 +4836,24 @@ int main() {
             if (eof) glfwSetWindowShouldClose(window, GLFW_TRUE);  // the editor is gone
         }
         if (!g_dropped.empty()) {
-            open_file(fs::path(std::u8string(g_dropped.begin(), g_dropped.end())), "", false);
+            const std::vector<std::string> dropped = std::move(g_dropped);
             g_dropped.clear();
+            for (const std::string& d : dropped) open_file(fs::path(std::u8string(d.begin(), d.end())), "", kDropInNewTab);
         }
+#ifdef __ANDROID__
+        // A document that Java re-read from its original (spec 35): it takes the place of the tab that shows the old copy.
+        while (auto r = android_shell::take_replacement()) {
+            const fs::path from(std::u8string(r->first.begin(), r->first.end())), to(std::u8string(r->second.begin(), r->second.end()));
+            if (const auto at = find_tab(from)) replace_tab_doc(*at, to);
+            else open_file(to, "", true);
+        }
+        // Java could not read the original of a restored tab again (the tab says its copy may be old), or the user picked it again.
+        while (auto ev = shell::take_source_state()) {
+            const fs::path p(std::u8string(ev->path.begin(), ev->path.end()));
+            if (const auto at = find_tab(p)) (*at == active_tab ? st : tabs[*at]->st).stale_copy = ev->stale;
+            extra_frames = std::max(extra_frames, 3);
+        }
+#endif
         // Remember the windowed rect (for the state file and for leaving fullscreen).
         if (shown && !fullscreen && !glfwGetWindowAttrib(window, GLFW_ICONIFIED) && !glfwGetWindowAttrib(window, GLFW_MAXIMIZED)) {
             int x, y, w, h, l, t, r, b;
@@ -4741,7 +5160,7 @@ int main() {
 
 #ifdef __ANDROID__
         {  // Fingers on the document (spec 35): a drag and a fling scroll, a pinch zooms.
-            g_touch_ui_only = ui.settings_open;
+            g_touch_ui_only = ui.settings_open;  // (the tab list is a popup: the document is covered for that already)
             android_shell::set_raw_touch(ui.settings_open);
             const android_shell::DocTouch t = android_shell::doc_touch();
             const bool doc_view = !slides.on && !pg.on;
@@ -4800,7 +5219,7 @@ int main() {
                 st.scroll_target = st.scroll_cur = at;  // 1:1 with the finger: no easing
                 return moved;
             };
-            if (doc_view && t.h_key && t.h_dx != 0 && !g_pinch.active) {  // a sideways drag / fling of a wide block
+            if (doc_view && t.h_key && t.h_key != android_shell::tab_strip_key() && t.h_dx != 0 && !g_pinch.active) {  // a sideways drag / fling of a wide block
                 bool end = false;
                 render_scroll_h(st.cache, static_cast<const char*>(t.h_key), t.h_dx, &end);
                 if (end) android_shell::doc_touch_hit_end_h();
@@ -5035,21 +5454,46 @@ int main() {
         // (+2: egui's panel is two pixels taller than its buttons plus margins; measured with the visual suite.)
         const bool bare = slides.on || pg.on;  // (slides and the page export have no panels)
         const float bar_h = bare ? 0.0f : ImGui::GetFrameHeight() + 2 * pad_y + std::floor(2.0f * scale);  // (slides: no toolbar)
+        ui.tab_count = tabs.size();
+#ifdef __ANDROID__
+        // (spec 35: at least 840 dp wide, Material's "expanded" width, and 480 dp tall: a tablet held sideways, not upright, and not a phone
+        // held sideways, whose 411 dp of height are too few to give 52 dp to a second bar)
+        ui.tab_strip = work_size.x >= 840.0f * scale && work_size.y >= 480.0f * scale;
+#endif
         if (!bare) {
             ImGui::SetCursorPos(ImVec2(pad_x, pad_y));
             draw_toolbar(st, ui, conf, themes, theme, fonts, window, scale, now);
         }
-        // The tab bar (spec 34): a second panel as tall as the toolbar, with 2 or more tabs.
-        const bool show_tabs = !bare && !g_editor && tabs.size() > 1;
-        const float tab_h = show_tabs ? bar_h : 0.0f;
-        TabBarResult tab_click;
-        if (show_tabs) {
+        auto tab_labels = [&] {
             std::vector<TabLabel> labels;
             for (size_t i = 0; i < tabs.size(); i++) {
                 const fs::path& p = tab_doc(i).path;
-                labels.push_back(p.empty() ? TabLabel{"demo", "the built-in demo"} : TabLabel{tab_name(to_utf8(p.filename())), display_path(p)});
+                labels.push_back(p.empty() ? TabLabel{"demo", "the built-in demo", "Built-in demo", true}
+                                           : TabLabel{tab_name(to_utf8(p.filename())), display_path(p), to_utf8(p.filename()), false});
             }
+            return labels;
+        };
+        // The tab bar (spec 34): a second panel as tall as the toolbar, with 2 or more tabs.
+#ifdef __ANDROID__
+        // (spec 35: a wide window, a tablet held sideways, has the strip, with fingers' sizes; a narrow one has the toolbar's tabs button and its panel)
+        const bool show_tabs = !bare && ui.tab_strip;
+        const float tab_h = show_tabs ? std::max(bar_h, std::round(52.0f * scale)) : 0.0f;
+#else
+        const bool show_tabs = !bare && !g_editor && tabs.size() > 1;
+        const float tab_h = show_tabs ? bar_h : 0.0f;
+#endif
+        TabBarResult tab_click;
+#ifdef __ANDROID__
+        if (!show_tabs) android_shell::set_tab_strip(0, 0, 0, 0);
+#endif
+        if (show_tabs) {
+            const std::vector<TabLabel> labels = tab_labels();
+#ifdef __ANDROID__
+            tab_click = draw_tab_bar(labels, active_tab, ui, theme, fonts, work_pos.y + bar_h, tab_h, pad_x, pad_y, scale, true);
+            if (tab_click.add) platform::open_file_dialog(native_window(window));  // (the answer arrives as a document: a new tab)
+#else
             tab_click = draw_tab_bar(labels, active_tab, ui, theme, fonts, work_pos.y + bar_h, tab_h, pad_x, pad_y, scale);
+#endif
             const float tab_line_y = std::round(work_pos.y + bar_h + tab_h) - 1.0f;
             frame_dl->AddRectFilled(ImVec2(work_pos.x, tab_line_y), ImVec2(work_pos.x + work_size.x, tab_line_y + 1.0f), sep);
         }
@@ -5058,6 +5502,23 @@ int main() {
         const float line_y = std::round(work_pos.y + bar_h) - 1.0f;
         if (!bare) frame_dl->AddRectFilled(ImVec2(work_pos.x, line_y), ImVec2(work_pos.x + work_size.x, line_y + 1.0f), sep);
 
+#ifdef __ANDROID__
+        // A tab restored from its private copy because the original could not be read again (spec 35): a thin note with "Reopen".
+        if (!bare && st.stale_copy && !st.path.empty()) {
+            const float h = std::round(36.0f * scale);
+            const ImVec2 o = ImGui::GetCursorScreenPos();
+            ImGui::Dummy(ImVec2(work_size.x, h));
+            frame_dl->AddRectFilled(o, ImVec2(o.x + work_size.x, o.y + h), theme.ui.panel);
+            frame_dl->AddRectFilled(ImVec2(o.x, o.y + h - 1.0f), ImVec2(o.x + work_size.x, o.y + h), sep);
+            const float em = 13.0f * scale;
+            const float size = fonts.px(fonts.regular, em), adv = fonts.advance_scale(fonts.regular, em);
+            draw_text(frame_dl, fonts.regular, size, adv, ImVec2(o.x + pad_x, o.y + (h - size) * 0.5f), theme.ui.weak, "Saved copy, may be out of date");
+            const float bw = std::round(80.0f * scale), bh = std::round(h - 6.0f * scale);
+            ImGui::SetCursorScreenPos(ImVec2(o.x + work_size.x - bw - pad_x, o.y + std::round((h - bh) * 0.5f)));
+            if (ImGui::Button("Reopen##stale", ImVec2(bw, bh))) shell::show_open_picker(to_utf8(st.path));  // (the picked file replaces this tab)
+            ImGui::SetCursorScreenPos(ImVec2(o.x, o.y + h));
+        }
+#endif
         // Optional error row (like the Rust version's error panel).
         if (!st.error.empty()) {
             ImGui::SetCursorPosX(pad_x);
@@ -5199,6 +5660,14 @@ int main() {
             extra_frames = std::max(extra_frames, 3);
         }
 
+#ifdef __ANDROID__
+        if (!bare) {  // the tab list (spec 35), drawn last in the window: its answers are applied now that it is drawn
+            const TabListResult tl = draw_tab_panel(tab_labels(), active_tab, ui, theme, fonts, work_pos, work_size, scale);
+            if (tl.close >= 0) close_tab(size_t(tl.close));
+            else if (tl.switch_to >= 0) switch_tab(size_t(tl.switch_to));
+            if (tl.add) platform::open_file_dialog(native_window(window));  // (the answer arrives as a document: a new tab)
+        }
+#endif
         ImGui::End();
 
         // Settings window (spec 9) and the autoscroll marker on top.
@@ -5271,6 +5740,7 @@ int main() {
     presenter_close();
     conf.flush(glfwGetTime(), true);  // don't lose a change made just before closing
     save_state_file();
+    guard_clear();
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();

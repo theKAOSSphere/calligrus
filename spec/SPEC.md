@@ -398,7 +398,7 @@ highlighted (`Action::ThemePicker` in `navigation.cpp`; the dropdown itself is `
   `CMAKE_MSVC_RUNTIME_LIBRARY` is `MultiThreaded` (/MT). Result: `calligrus.exe` runs with no DLLs and (with §8) no
   assets folder. Check with `dumpbin /dependents`: only system DLLs (kernel32, user32,
   gdi32, opengl32, shell32, comdlg32, dwmapi, ...).
-- On Linux the libraries are static too (triplet `x64-linux`); the executable only links the
+- On Linux the libraries are static too (built from source by `cmake/deps.cmake`); the executable only links the
   system's libc, libstdc++ and X11/GL.
 
 ## 11. Icon, keys, links, history, state file
@@ -524,6 +524,20 @@ highlighted (`Action::ThemePicker` in `navigation.cpp`; the dropdown itself is `
   invalid UTF-8 there) is not parsed. The document area shows "NAME is not a text file (looks like
   a PDF). Calligrus shows Markdown and Org files." and an "Open with default app" button (the same
   hand-over to the OS as links to non-Markdown files). Fixture `binary-note`; unit tests in `calligrus-model-test`.
+- **Very large files and data files** (same ways of opening; `md::kMaxFileBytes`, `md::too_large_message`, `md::is_plain_text_path`,
+  `md::plain_text_as_markdown`, `md::max_file_bytes`). Laying text out costs hundreds of times the file's size in memory, so the limit
+  depends on the platform. **Android**: a hard limit of **1 MB** (decimal): a bigger file is not read at all and the document area shows
+  the binary note's place with "NAME is too large to display: 7.8 MB, the limit is 1.0 MB." and the "Open with default app" button
+  (`DocState::binary = "too large"`, `DocState::note`). **Desktop (Windows/Linux)**: a soft limit of **50 MB**: a bigger file is not
+  read until asked, the note reads "NAME is 63.2 MB and may take a long time and a lot of memory to display." with two buttons, **Open
+  anyway** (loads the file normally; the choice is `DocState::open_anyway`, kept for reloads and file-change refreshes of that file in
+  that tab, dropped when the tab shows another file) and "Open with default app". Nothing is refused on the desktop. Reproduced on the Android tablet emulator
+  (2 GB RAM image, 4 GB host): a 7.8 MB CSV, parsed as Markdown, is one paragraph of 100 000 soft-wrapped lines; the app grew to 3 GB
+  resident and the system's low-memory killer ended it ("min watermark is breached even after kill") a few seconds after the first
+  frame; the desktop survived it (12 s to the first frame, hundreds of MB). A 1.95 MB file cost about 580 MB on the emulator, hence the
+  limit. Files with the extensions `.csv`, `.tsv` and `.log` are data, not documents: they are shown as one plain code block (the
+  lines as they are, never joined into a paragraph), not parsed as Markdown. `.txt` and every other extension still parse as
+  Markdown, and Markdown / Org files render as before. Unit tests in `calligrus-model-test`.
 
 ## 14. Headless script mode
 
@@ -1562,7 +1576,7 @@ buffer the editor has focused).
   The names are measured and drawn with the document font's exact advances plus the face's kerning
   (`prose_shaping::kerned_pieces`), not ImGui's whole-pixel UI advances, and a tab is
   `ceil(4 + name + 4 + x + 4)` points wide.
-- **Opening**: Recent / drop replace the current tab's document, (history keeps working). A NEW tab: Open (Ctrl+O, the toolbar button; Android, which has no tabs yet, replaces); Ctrl+click or middle-click on a link to a Markdown/Org file;
+- **Opening**: Recent / drop replace the current tab's document, (history keeps working). A NEW tab: Open (Ctrl+O, the toolbar button; Android: §35); Ctrl+click or middle-click on a link to a Markdown/Org file;
   Ctrl+T (the same as Ctrl+O); files given on the command line (several allowed)
   each open in a tab; "Open in new tab" in the recent popup (Ctrl+Enter there). Opening a file
   that is already open in a tab switches to that tab instead (same rule as recent files: same
@@ -1701,8 +1715,8 @@ sections above. Build: BUILDING.md. Desktop behaviour is unchanged (the visual s
   The screen density (dpi / 160) is the DPI scale of spec 1: the toolbar and text are in dp. Widgets are
   finger-sized (larger padding and scroll bars). Rotation and split screen only resize the window.
   While the app is in the background the GL context and all textures are kept; the event loop sleeps.
-- **Toolbar**: Open, the recent-files arrow, Reload, Outline, A- / A+, the theme picker, Settings and the file name.
-  Left out: Slides (slides mode, tabs and the presenter need keys and a second window), PDF export (a child process
+- **Toolbar**: Open, the recent-files arrow, Reload, Outline, A- / A+, the theme picker, Settings, the tabs button and the file name.
+  Left out: Slides (slides mode and the presenter need keys and a second window), PDF export (a child process
   and a save dialog), editor mode (`--editor`), `--register`.
   **Overflow menu (shared code)**: when the buttons do not fit the width, they move one by one into a menu behind a
   three-dot button at the right end of the bar, so the bar never runs off the screen. Priority, the last to go first
@@ -1715,7 +1729,7 @@ sections above. Build: BUILDING.md. Desktop behaviour is unchanged (the visual s
   desktop window) the name gets the room left before the right edge of the bar: shortened in the middle the same way
   (Android; the desktop draws the whole name and the window edge cuts it, as the references show), and left out when
   there is room for fewer than 3 characters. The desktop has the three-dot button only below 400 px of toolbar width, so its
-  usual window sizes (the visual suite's included) are unchanged. On Android the button comes at any width where the buttons do not fit (a landscape tablet shows everything). On a
+  usual window sizes (the visual suite's included) are unchanged. On Android the button comes at any width where the buttons do not fit (a landscape tablet shows everything). Whenever the settings gear lands in the three-dot menu (Android or desktop) it is the text entry "Settings", like the other entries; on the bar itself it stays the gear icon. On a
   screen narrower than 600 dp (a phone upright) the outline panel starts hidden.
 - **Opening files**: the Open button starts Android's document picker (`ACTION_OPEN_DOCUMENT`, `text/*`,
   `application/octet-stream`, any name: `.md`, `.markdown`, `.org`). The app is also offered by "Open with" (`VIEW` with
@@ -1745,5 +1759,18 @@ sections above. Build: BUILDING.md. Desktop behaviour is unchanged (the visual s
   `STOP`, `SAVE_STATE`, `TERM_WINDOW`), since the process can be killed from then on. ImGui's clock follows real time
   (the frame delta is capped at 5 s, not 0.5 s). Dev switches in the app home: `power_legacy` (the old loop), `power_log`
   (a log line per wait, frame and skipped wake, tag `calligrus`).
+- **Tabs** (§34 with these differences). Two layouts, by window size: a window at least **840 dp wide and 480 dp tall** (Material's "expanded" width; a tablet held sideways, not upright, and not a phone held sideways, which has 411 dp of height) shows the **tab strip**; any other window (phone, phone sideways, tablet upright) has the **tabs button** and its **panel**. Turning the device switches between them with the tabs, scroll positions and the open panel kept (an open panel closes when the strip takes over). **Tabs button and panel.** The toolbar ends with a tabs button (a rounded square holding the number of open tabs, 99+ shown as `:)`, drawn large: the number fills the square, which is 66 % of the button height; last to go into the overflow menu with Open, where it is "Tabs (N)...", and then the panel hangs under the "more" button). Tapping it opens the **tab panel**, a drop-down under the button, in the style of the other popups: right-aligned to the button, or hanging from the right margin when it would not fit left of it (a phone), `min(window width - 16 dp, 360 dp)` wide, inside the system bars and 8 dp from the window's side and bottom edges. At the top a **New tab** row (the file picker; its answer is a new tab) that does not scroll, then one row per tab, **52 dp** tall: the file name (shortened in the middle when long; "Built-in demo" for the demo), the active tab filled with the selection colour, and a **52 x 52 dp `x` box** on the right, set off from the name by a faint vertical rule. The panel is as tall as its rows, up to 60 % of the window height and never below the bottom margin; with more rows the last visible one is cut in half so that it shows the list scrolls, the list scrolls by finger (drag and fling, a thin bar at its right edge), and when opened it shows the active tab (centred). A drag that starts on a row scrolls and switches nothing; a tap on a name switches to that tab and closes the panel, a tap on the `x` closes that tab and keeps the panel open (the tab to its right, or the last one, becomes active, as on the desktop; closing the only tab leaves the demo tab and closes the panel). The panel is modal: a tap outside it closes it and goes no further, and so does the Android **Back key** (it does not leave the app; Back with the panel closed does what it did before). The document underneath gets no touch while the panel is open. **Tab strip.** The desktop strip (§34) at fingers' size, under the toolbar, always shown (even with one tab, the demo included), so the toolbar has no tabs button; the gear stays in the toolbar as there is room. The strip is 52 dp tall, its tabs 48 dp, each with a 48 dp-wide `x` box on the right (shown on every tab: there is no hover) and the name before it; a **+** box (48 dp, pinned at the right end) opens the file picker into a new tab. Tapping a tab switches to it, tapping its `x` closes it (a tap is a click on release; a drag is none). A row wider than the window scrolls by sideways finger drag with a fling (`android_shell::set_tab_strip`: the window layer scrolls it like a wide code block) and the mouse wheel, and keeps the active tab in view. The desktop's strip is unchanged.
+  A document that arrives from Java (picker, "Open with", shared text or file) is opened like a dropped file but **in a new tab** (a desktop drop replaces the tab): the demo tab is replaced by it, and a document that is already open (the copies are named by a hash of the bytes, so the same text is the same path) shows its tab instead. Recent files replace the current tab as on the desktop.
+  **Restoring**: `state.toml` lists the open tabs (`tabs`, `active_tab`, §34) even when there is only one (Android sets `State::keep_single_tab`; the desktop still writes them only for 2 or more), and they are written when the app goes to the background; on a start without a document every listed tab that still exists is reopened, each at its remembered scroll, with the saved active one shown. A tab's file is the private copy `<files dir>/opened/<hash>/<name>`; the 60 newest copies are kept, and the copies of the open tabs count as new (their folders are touched at every state save), so a restored tab always finds its copy. Java also remembers, per copy, the source `content://` URI (`SharedPreferences` "sources": copy to URI and URI to its latest copy), and asks for a persistable read permission on every document it opens (`takePersistableUriPermission`): the picker (`ACTION_OPEN_DOCUMENT`) grants it; "Open with" and shares only when the sending app offers a persistable grant, otherwise the call is refused and nothing is kept. After the tabs are restored, Java re-reads each restored tab's source **when the permission is still held** and the source is readable; a changed text is stored as a new copy and **replaces the document of that tab** (same position, scroll kept); an unchanged one does nothing. **Without** a held permission (a one-time grant, a `file:` URI, shared text, a source that is gone or unreadable) the tab is restored from its private copy, which is the text as it was when it was opened (possibly stale), and **the tab says so**: a thin note under the toolbar, "Saved copy, may be out of date", with a "Reopen" button that opens the system picker; the picked file replaces that tab (same position), and the note goes (also once the tab is refreshed from its source). A tab whose source was re-read, and shared text (no source file), show no note. **Closing a tab** lets go of the persisted read permission of its source (`releasePersistableUriPermission`) unless another open tab shows the same source; the copies removed by the retention limit are forgotten the same way (their permission is released when no newer copy of that source exists). Opening again, by the picker, a source whose text changed since it was read likewise replaces the tab of the older copy (or opens a new tab if that tab was closed). The older copy stays on disk until the retention drops it.
+  Memory: a tab costs its parsed document (§34); background tabs keep their layout caches (measured on the desktop to save nothing when dropped).
+  **Crash-loop guard** (every platform, not in script mode): `loading.marker` in the state folder (next to `state.toml`) names the
+  document that is being loaded and shown for the first time. It is written and flushed before a restored tab is loaded, and when the
+  frame loop first sees a different active document; it is removed after the document has been on screen for 4 s of frames (the
+  system's memory killer strikes seconds after the first frame, not at it), when the app goes to the background, or on exit. A
+  start-up that finds the marker still there knows the last run died on that document: that tab is **not reopened** and leaves the tab
+  list (the other tabs restore normally, the demo shows if none is left), and the active tab shows the error row "NAME was not reopened
+  because it crashed the app last time" (stays until dismissed). A crash by a build without the guard leaves no marker; what protects
+  an installed state with such a tab is the Android size limit (§13): a saved file over 1 MB restores as the "too large" note and is never
+  laid out. Other crashes in such a build can only be caught from the second one on.
 - **Later work**: the soft keyboard, slides and the presenter, PDF export, text selection by long press and handles,
   the outline as a drawer on narrow screens, relative pictures (copy the document's folder, or read it through the storage framework), a share-out, a Play build.

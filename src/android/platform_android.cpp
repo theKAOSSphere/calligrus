@@ -8,6 +8,7 @@
 #include <jni.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <cstdio>
 #include <deque>
@@ -29,7 +30,9 @@ namespace {
 
 android_app* g_app = nullptr;
 std::mutex g_mutex;
-std::deque<std::string> g_opened;  // paths of documents that arrived, not yet taken
+std::deque<Opened> g_opened;  // documents that arrived, not yet taken
+std::deque<SourceState> g_source_states;
+std::atomic<bool> g_back_wanted{false}, g_back_pressed{false};
 
 // A JNIEnv for this thread (attaching it if it is not a Java thread yet) and the activity object.
 class Env {
@@ -109,7 +112,9 @@ uint64_t fnv1a(const std::string& s) {
 android_app* app() { return g_app; }
 void set_app(android_app* a) { g_app = a; }
 
-void show_open_picker() { call("showOpenPicker", "()V", "", false); }
+void show_open_picker(const std::string& replaces) { call("showOpenPicker", "(Ljava/lang/String;)V", replaces, false); }
+void release_source(const std::string& closed_then_open) { call("releaseSource", "(Ljava/lang/String;)V", closed_then_open, false); }
+void refresh_sources(const std::string& paths) { call("refreshSources", "(Ljava/lang/String;)V", paths, false); }
 void open_external_url(const std::string& url) { call("openUrl", "(Ljava/lang/String;)V", url, false); }
 void set_light_bars(bool light) { call("setLightBars", "(Z)V", "", light); }
 
@@ -126,7 +131,7 @@ bool prefers_dark() {
     return AConfiguration_getUiModeNight(g_app->config) != ACONFIGURATION_UI_MODE_NIGHT_NO;
 }
 
-void post_open(const std::string& name, const std::string& bytes) {
+std::string post_open(const std::string& name, const std::string& bytes, const std::string& replaces, bool refresh) {
     // <files>/opened/<hash of the bytes>/<name>: the same document is the same path, a new one a new path.
     char hash[24];
     std::snprintf(hash, sizeof hash, "%016llx", static_cast<unsigned long long>(fnv1a(bytes)));
@@ -138,45 +143,105 @@ void post_open(const std::string& name, const std::string& bytes) {
     fs::create_directories(dir, ec);
     if (ec || !platform::write_file_atomic(file, bytes)) {
         LOGE("cannot store %s", file.string().c_str());
-        return;
+        return "";
     }
-    // Keep the 40 newest documents.
+    // Keep the 60 newest documents (the open tabs' copies count as new: main.cpp touches them when it saves the state).
     std::vector<std::pair<fs::file_time_type, fs::path>> dirs;
     for (const auto& d : fs::directory_iterator(root, ec))
         if (d.is_directory(ec)) dirs.push_back({d.last_write_time(ec), d.path()});
-    if (dirs.size() > 40) {
+    std::string dropped;  // the copies removed, one per line: Java forgets their sources (spec 35)
+    if (dirs.size() > 60) {
         std::sort(dirs.begin(), dirs.end());
-        for (size_t i = 0; i + 40 < dirs.size(); i++)
-            if (dirs[i].second != dir) fs::remove_all(dirs[i].second, ec);
+        for (size_t i = 0; i + 60 < dirs.size(); i++)
+            if (dirs[i].second != dir) {
+                for (const auto& f : fs::directory_iterator(dirs[i].second, ec)) dropped += f.path().string() + "\n";
+                fs::remove_all(dirs[i].second, ec);
+            }
+    }
+    if (!dropped.empty()) call("forgetCopies", "(Ljava/lang/String;)V", dropped, false);
+    const std::string path = file.string();
+    if (refresh && path == replaces) {
+        LOGI("source of %s is unchanged", path.c_str());
+        return path;
     }
     {
         std::lock_guard<std::mutex> lock(g_mutex);
-        g_opened.push_back(file.string());
+        g_opened.push_back({path, path == replaces ? std::string() : replaces});
     }
-    LOGI("opened %s (%zu bytes)", file.string().c_str(), bytes.size());
+    LOGI("opened %s (%zu bytes)%s", path.c_str(), bytes.size(), replaces.empty() || path == replaces ? "" : ", replacing an older copy");
+    wake();
+    return path;
+}
+
+std::optional<SourceState> take_source_state() {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    if (g_source_states.empty()) return std::nullopt;
+    SourceState s = std::move(g_source_states.front());
+    g_source_states.pop_front();
+    return s;
+}
+
+void set_back_wanted(bool wanted) {
+    g_back_wanted = wanted;
+    if (!wanted) g_back_pressed = false;
+}
+bool take_back() { return g_back_pressed.exchange(false); }
+bool back_wanted() { return g_back_wanted; }
+void press_back() {
+    g_back_pressed = true;
+    wake();
+}
+void post_source_state(const std::string& path, bool stale) {
+    {
+        std::lock_guard<std::mutex> lock(g_mutex);
+        g_source_states.push_back({path, stale});
+    }
     wake();
 }
 
-std::optional<std::string> take_opened_path() {
+std::optional<Opened> take_opened() {
     std::lock_guard<std::mutex> lock(g_mutex);
     if (g_opened.empty()) return std::nullopt;
-    std::string p = std::move(g_opened.front());
+    Opened o = std::move(g_opened.front());
     g_opened.pop_front();
-    return p;
+    return o;
 }
 
 }  // namespace shell
 
 // The Java side hands over a document it read (picker, "Open with", share): name and bytes.
-extern "C" JNIEXPORT void JNICALL Java_io_github_thekaossphere_calligrus_MainActivity_nativeOpenDocument(JNIEnv* env, jclass, jstring name, jbyteArray data) {
-    if (!name || !data) return;
+extern "C" JNIEXPORT jstring JNICALL Java_io_github_thekaossphere_calligrus_MainActivity_nativeOpenDocument(JNIEnv* env, jclass, jstring name, jbyteArray data,
+                                                                                                         jstring replaces, jboolean refresh) {
+    if (!name || !data) return nullptr;
     const char* n = env->GetStringUTFChars(name, nullptr);
     const std::string display = n ? n : "";
     if (n) env->ReleaseStringUTFChars(name, n);
     const jsize len = env->GetArrayLength(data);
     std::string bytes(static_cast<size_t>(len), '\0');
     env->GetByteArrayRegion(data, 0, len, reinterpret_cast<jbyte*>(bytes.data()));
-    shell::post_open(display, bytes);
+    std::string old;
+    if (replaces) {
+        const char* r = env->GetStringUTFChars(replaces, nullptr);
+        if (r) old = r;
+        if (r) env->ReleaseStringUTFChars(replaces, r);
+    }
+    const std::string stored = shell::post_open(display, bytes, old, refresh == JNI_TRUE);
+    return env->NewStringUTF(stored.c_str());
+}
+
+// The activity's back handler: true if the app takes the Back key itself (the tab list is open and closes).
+extern "C" JNIEXPORT jboolean JNICALL Java_io_github_thekaossphere_calligrus_MainActivity_nativeBack(JNIEnv*, jclass) {
+    if (!shell::back_wanted()) return JNI_FALSE;
+    shell::press_back();
+    return JNI_TRUE;
+}
+
+// Java's word about a restored tab's original (see shell::SourceState).
+extern "C" JNIEXPORT void JNICALL Java_io_github_thekaossphere_calligrus_MainActivity_nativeSourceState(JNIEnv* env, jclass, jstring path, jboolean stale) {
+    if (!path) return;
+    const char* c = env->GetStringUTFChars(path, nullptr);
+    if (c) shell::post_source_state(c, stale == JNI_TRUE);
+    if (c) env->ReleaseStringUTFChars(path, c);
 }
 
 namespace platform {

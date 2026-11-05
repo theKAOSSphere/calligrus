@@ -3,9 +3,11 @@
 Calligrus is C++20 with CMake. CMake downloads and builds the dependencies itself (Dear ImGui, GLFW, md4c, stb,
 libwebp, toml++, zlib, HarfBuzz, FreeType): `cmake/deps.cmake` pins each one to a release tarball with a SHA-256, and
 they are linked in statically. Fonts, themes, the demo document and the syntax grammars are compiled into the
-executable, so the result is a single file. The first configure needs network access; the downloaded archives are kept
+executable, so the result is a single file. Release builds also drop unused code and data at link time (`/OPT:REF /OPT:ICF` on MSVC, `--gc-sections` on GCC and Clang). The first configure needs network access; the downloaded archives are kept
 in `<build folder>/_downloads` (set the environment variable or CMake variable `CALLIGRUS_DOWNLOAD_DIR` to share them
 between build folders; CI caches that folder).
+
+The environment variable `CALLIGRUS_COMPILER_LAUNCHER` (opt-in, for example `sccache`) wraps the C/C++ compiler in the Windows, Linux and Android builds; CI sets it. Unset, the build is unchanged.
 
 A plain build needs nothing but CMake and a compiler:
 
@@ -48,7 +50,7 @@ the distribution's libraries (experimental: not tested in CI).
 ## Android
 
 Calligrus also runs on Android (a spike: see spec section 35). The app is the same C++ as the desktop app, loaded by
-GameActivity; its Java side is in `android/` (a Gradle project). Needs a Linux machine (or WSL) with:
+GameActivity; its Java side is in `android/` (a Gradle project). Several documents are open in tabs behind a toolbar button, and the tabs are restored after the process is killed (spec section 35; to try it on an emulator, open several files with `adb shell am start -a android.intent.action.VIEW -d content://... -t text/markdown`, or through the picker, then `adb shell am force-stop io.github.thekaossphere.calligrus` and start the app again). Needs a Linux machine (or WSL) with:
 
 - the Android SDK (platform 36, build-tools 35 or 36, CMake 3.22.1) and NDK 27.2.12479018 (`ANDROID_HOME`; the NDK is
   found as `$ANDROID_HOME/ndk/27.2.12479018`), and JDK 17 for Gradle;
@@ -97,8 +99,7 @@ Otherwise the APK stays unsigned.
 
 GitHub Actions does this with two repository secrets: `CALLIGRUS_KEYSTORE_B64` (the keystore, base64) and
 `CALLIGRUS_KEYSTORE_PASSWORD` (store and key password; the alias is `calligrus`). The CI `android` job builds a signed
-APK when they exist (artifact `calligrus-android`) and an unsigned one otherwise (fork pull requests). The release
-workflow requires them and attaches `calligrus-<tag>-android-arm64.apk` to the draft release.
+APK when they exist (artifact `calligrus-android`) and an unsigned one otherwise (fork pull requests). The release workflow reuses the signed APK of the tagged commit's CI run (it builds the APK itself when there is no such run), and attaches `calligrus-<tag>-android-arm64.apk` to the draft release.
 
 ## Tests
 

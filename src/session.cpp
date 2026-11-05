@@ -347,7 +347,7 @@ std::string write_state(const State& s, bool with_window) {
         for (size_t i = 0; i < s.recent.size(); ++i) t += (i ? ", " : "") + toml_str(s.recent[i]);
         t += "]\n";
     }
-    if (s.tabs.size() >= 2) {  // (spec 34)
+    if (s.tabs.size() >= (s.keep_single_tab ? 1 : 2)) {  // (spec 34; Android: spec 35)
         t += "tabs = [";
         for (size_t i = 0; i < s.tabs.size(); ++i) t += (i ? ", " : "") + toml_str(s.tabs[i]);
         t += "]\nactive_tab = " + std::to_string(std::clamp<size_t>(s.active_tab, 1, s.tabs.size())) + "\n";

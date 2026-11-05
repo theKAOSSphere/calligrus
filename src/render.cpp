@@ -324,6 +324,8 @@ float draw_code(const Ctx& c, const md::Block& b, float x, float y, float width)
     const ImVec2 clip_min(text_left, min.y + 1), clip_max(max.x - pad, max.y - 1);
     c.dl->PushClipRect(clip_min, clip_max, true);
     const std::vector<CodeSpan>& spans = highlight_code(b.text, b.lang);
+    // Rows far outside the window are not drawn (same pixels; a data file of a million lines overflowed the draw list and crashed).
+    const float vis_top = c.dl->GetClipRectMin().y - 2 * line_h, vis_bottom = c.dl->GetClipRectMax().y + 2 * line_h;
     float ly = y + pad;
     for (size_t i = 0; i < rows.size(); i++) {
         std::string_view line = rows[i].text;
@@ -337,6 +339,10 @@ float draw_code(const Ctx& c, const md::Block& b, float x, float y, float width)
             auto hl = c.sel->push(box_min, box_max, std::move(xs), std::string(line), false);
             draw_find_highlights(c.dl, *c.sel, box_min.y, box_max.y, c.theme);
             if (hl) c.dl->AddRectFilled(ImVec2(hl->first, box_min.y), ImVec2(hl->second, box_max.y), c.hl);
+        }
+        if (ly < vis_top || ly > vis_bottom) {
+            ly += line_h;
+            continue;
         }
         draw_code_line(c, at, px, line, size_t(line.data() - b.text.data()), spans);
         if (rows[i].cont) {  // the mark of a continuation row: a small arrow in the indent
@@ -356,6 +362,8 @@ float draw_code(const Ctx& c, const md::Block& b, float x, float y, float width)
         size_t number = 0;
         for (size_t i = 0; i < rows.size(); i++) {
             if (rows[i].cont) continue;  // (a wrapped line's other rows have no number)
+            const float ny = y + pad + i * line_h;
+            if (ny < vis_top || ny > vis_bottom) { ++number; continue; }
             const std::string n = std::to_string(++number);
             const float w = text_width(c.fonts.mono, px, adv, n);
             draw_text(c.dl, c.fonts.mono, px, adv, ImVec2(std::round(text_left - ch_w - w), std::round(y + pad + i * line_h)),

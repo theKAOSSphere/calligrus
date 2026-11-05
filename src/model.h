@@ -5,6 +5,7 @@
 // the renderer walks that tree. Parsing and drawing stay independent.
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -107,5 +108,21 @@ Document parse(std::string_view src);
 const char* looks_binary(std::string_view bytes);
 // The note shown instead of such a file.
 std::string binary_message(const std::string& name, const std::string& kind);
+
+// The largest file Calligrus lays out (spec 3: very large files). Laying text out costs hundreds of times the file's size in memory
+// (a 7.8 MB CSV took 3 GB on a tablet and the system killed the app), so a bigger file gets a note instead of its text.
+// Android: a hard limit of 1 MB (decimal, as file managers show sizes). Desktop: a soft limit of 50 MB, the note offers "Open anyway".
+constexpr size_t kMaxFileBytesAndroid = 1000000;
+constexpr size_t kMaxFileBytesDesktop = 50000000;
+constexpr size_t max_file_bytes(bool android) { return android ? kMaxFileBytesAndroid : kMaxFileBytesDesktop; }
+// The note shown instead of a file of `bytes` bytes that is over the limit. Hard (Android): "name is too large to display: 7.8 MB,
+// the limit is 1.0 MB."; soft (desktop): "name is 63.2 MB and may take a long time and a lot of memory to display."
+std::string too_large_message(const std::string& name, uint64_t bytes, bool android);
+// Files that are data, not documents (.csv, .tsv, .log): shown as plain text, line by line, not parsed as Markdown (whose single
+// newlines would join all the rows into one paragraph).
+bool is_plain_text_path(std::string_view path);
+// The Markdown that shows `text` as it is: one fenced code block (the fence is longer than any run of backquotes in the text).
+std::string plain_text_as_markdown(std::string_view text);
+
 
 }  // namespace md

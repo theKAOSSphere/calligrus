@@ -31,6 +31,9 @@ val relAlias: String = System.getenv("CALLIGRUS_RELEASE_KEY_ALIAS")?.takeIf { it
 val relKeyPass: String? = System.getenv("CALLIGRUS_RELEASE_KEY_PASSWORD")?.takeIf { it.isNotEmpty() } ?: relStorePass
 val signRelease: Boolean = relKeystore != null && relStorePass != null
 
+// Optional compiler cache for CI (CALLIGRUS_COMPILER_LAUNCHER=sccache). Unset locally, so nothing changes there.
+val compilerLauncher: String? = System.getenv("CALLIGRUS_COMPILER_LAUNCHER")?.takeIf { it.isNotBlank() }
+
 android {
     namespace = "io.github.thekaossphere.calligrus"
     compileSdk = 36
@@ -40,7 +43,7 @@ android {
         applicationId = "io.github.thekaossphere.calligrus"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
+        versionCode = 4
         versionName = cmakeVersion
 
         ndk {
@@ -60,6 +63,12 @@ android {
                     // information: -PcalligrusNativeDebug=true gives -O0 -g for a native debugger.
                     "-DCMAKE_BUILD_TYPE=${if (nativeDebug) "Debug" else "Release"}"
                 )
+                if (compilerLauncher != null) {
+                    arguments += listOf(
+                        "-DCMAKE_C_COMPILER_LAUNCHER=$compilerLauncher",
+                        "-DCMAKE_CXX_COMPILER_LAUNCHER=$compilerLauncher"
+                    )
+                }
                 cppFlags += "-std=c++20"
             }
         }

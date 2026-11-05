@@ -29,13 +29,17 @@ namespace shaped_draw {
 
 namespace {
 
-constexpr int kPage = 1024;      // each texture is kPage x kPage pixels
-constexpr size_t kMaxPages = 8;  // 32 MB of glyph pictures at most
+// The textures grow with use: most documents need only a few glyphs here (code ligatures, complex scripts), so the
+// first page is small (256 KB instead of 4 MB of video and driver memory), the second medium, the rest full size.
+// Up to 8 full pages (32 MB of glyph pictures) plus the two small ones.
+constexpr size_t kMaxPages = 10;
+constexpr int page_size(size_t i) { return i == 0 ? 256 : i == 1 ? 512 : 1024; }  // pixels, square
 
 // One texture with glyphs packed in rows ("shelves"): glyphs go left to right; a glyph that
 // does not fit starts a new row below, as tall as the first glyph of that row.
 struct Page {
     GLuint tex = 0;
+    int size = 0;  // the texture is size x size pixels
     int x = 0, y = 0, row_h = 0;
 };
 
@@ -101,18 +105,20 @@ Slot reserve(int w, int h) {
     for (size_t i = 0; i < kMaxPages; i++) {
         if (i == g_pages.size()) {
             Page p;
+            p.size = page_size(i);
             glGenTextures(1, &p.tex);
             glBindTexture(GL_TEXTURE_2D, p.tex);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            const std::vector<unsigned char> blank(size_t(kPage) * kPage * 4, 0);
+            const std::vector<unsigned char> blank(size_t(p.size) * p.size * 4, 0);
             glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, kPage, kPage, 0, GL_RGBA, GL_UNSIGNED_BYTE, blank.data());
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, p.size, p.size, 0, GL_RGBA, GL_UNSIGNED_BYTE, blank.data());
             g_pages.push_back(p);
         }
         Page& p = g_pages[i];
-        if (p.x + w > kPage) p.y += p.row_h, p.x = 0, p.row_h = 0;  // next row
-        if (p.y + h > kPage) continue;
+        if (w > p.size) continue;  // (too wide for this small page)
+        if (p.x + w > p.size) p.y += p.row_h, p.x = 0, p.row_h = 0;  // next row
+        if (p.y + h > p.size) continue;
         const Slot s{i, p.x, p.y};
         p.x += w + 1;  // one empty pixel between glyphs
         p.row_h = std::max(p.row_h, h + 1);
@@ -163,8 +169,9 @@ bool rasterise(Face& face, uint32_t glyph, float size, float density, float asce
 
     out.visible = true;
     out.page = at.page;
-    out.u0 = float(at.x) / kPage, out.v0 = float(at.y) / kPage;
-    out.u1 = float(at.x + w) / kPage, out.v1 = float(at.y + h) / kPage;
+    const float page_px = float(g_pages[at.page].size);
+    out.u0 = float(at.x) / page_px, out.v0 = float(at.y) / page_px;
+    out.u1 = float(at.x + w) / page_px, out.v1 = float(at.y + h) / page_px;
     out.x0 = float(slot->bitmap_left) / density;
     out.y0 = float(-slot->bitmap_top) / density + ascent;
     out.x1 = out.x0 + float(w) / density;
