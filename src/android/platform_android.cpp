@@ -33,6 +33,7 @@ std::mutex g_mutex;
 std::deque<Opened> g_opened;  // documents that arrived, not yet taken
 std::deque<SourceState> g_source_states;
 std::atomic<bool> g_back_wanted{false}, g_back_pressed{false};
+std::atomic<bool> g_lb_wanted{false}, g_lb_pressed{false};  // the zoomed picture (spec 27) is open: Back closes it
 
 // A JNIEnv for this thread (attaching it if it is not a Java thread yet) and the activity object.
 class Env {
@@ -186,9 +187,14 @@ void set_back_wanted(bool wanted) {
     if (!wanted) g_back_pressed = false;
 }
 bool take_back() { return g_back_pressed.exchange(false); }
-bool back_wanted() { return g_back_wanted; }
+bool back_wanted() { return g_back_wanted || g_lb_wanted; }
+void set_lightbox_back(bool wanted) {
+    g_lb_wanted = wanted;
+    if (!wanted) g_lb_pressed = false;
+}
+bool take_lightbox_back() { return g_lb_pressed.exchange(false); }
 void press_back() {
-    g_back_pressed = true;
+    (g_lb_wanted ? g_lb_pressed : g_back_pressed) = true;  // (the zoomed picture covers the tab list: it gets the key first)
     wake();
 }
 void post_source_state(const std::string& path, bool stale) {

@@ -1202,9 +1202,32 @@ renderer: a slide is a range of top-level blocks drawn alone, scaled to the wind
   background (radius 6, 12 pt padding), as big as fits inside a 40 pt margin (less a 32 pt
   caption line when the picture has alt text), at most 4x its natural size (diagrams 3x, and
   drawn again at that size in half steps so they stay sharp). The alt text (15 pt, light grey)
-  is centred under the card. A click anywhere or Esc closes it; meanwhile it takes every key.
-  Pictures and diagrams show the hand cursor. Works in both modes. Visual suite:
-  `zoom-copy.mdscript`.
+  is centred under the card. A click anywhere (a press that does not move past the drag threshold, 6 px; it closes on
+  the release) or Esc closes it; meanwhile it takes every key. Pictures and diagrams show the hand cursor. Works in both
+  modes. Visual suite: `zoom-copy.mdscript`.
+  **Zoom and pan inside it**: the view starts as the fit above (zoom 1) every time it opens. The **mouse wheel** zooms
+  about the pointer (the point of the picture under it stays under it), multiplicatively: x1.15 per notch (fractional
+  wheel values, a trackpad, scale the exponent), from the fit (the least) to the zoom at which the picture is **8x its
+  natural size** on screen (`nav::lightbox_max_zoom`; never below 1, so a picture already shown at its 4x / 3x limit can
+  go to 2x / 2.67x of that). The keys `+` / `=` (also the keypad's) and `-` zoom about the window's centre in steps of
+  x1.25, `0` goes back to the fit; they react only while the picture is open. A **left drag** pans (once the press has
+  passed the 6 px threshold; a press that has not is a click and closes). A **double click** goes back to the fit. While the
+  picture is zoomed in, a click closes it only after the double-click time (0.3 s), so that a double click is not taken for
+  a close; at the fit a click closes at once. Panning is clamped per axis (`nav::lightbox_clamp_pan`): along an axis where
+  the picture is smaller than the window it stays centred; along one where it is larger its centre may move until an edge
+  has come a quarter of the window's size in from the window's edge, so it can never be dragged off screen. The caption
+  stays where it is under the fitted card; when the picture is zoomed in it gets a dark pill behind it (70%) to stay
+  readable. Ctrl+wheel and Ctrl+`+` / `-` change the document's zoom only when no picture is open.
+  **Diagrams stay sharp**: the diagram is drawn again (as above, in half steps of its first bitmap's size) for the zoomed
+  size, so the lines stay crisp at 8x. While the zoom is moving (the last change under 150 ms ago) the bitmap in use is only
+  scaled; the new one is drawn when it has rested, so a wheel burst renders once. The bitmap is never larger than the
+  GPU's `GL_MAX_TEXTURE_SIZE` (asked once) on either side, nor than **64 megapixels** in all (256 MB of RGBA;
+  `nav::kLightboxMaxPixels`, `nav::lightbox_raster_cap`); beyond that the largest allowed bitmap is kept and scaled up
+  (slightly soft) instead of failing. The zoomed bitmaps of a diagram are dropped as the next one is made and when the
+  picture closes (`diagram_trim`), only the page's own one stays; the one in use is never freed while a frame that draws it is
+  pending. Pictures (bitmaps) just scale their texture. Visual suite: `zoom-pan.mdscript` (a diagram five times wider
+  than tall: fit, wheel in about a point, drag, `0`; the double click and the delay of a click while zoomed in need real
+  time between the clicks and are not scripted).
 - **Export button**: toolbar button "PDF" right after "Slides" (enabled when a file
   or an editor document is shown and no export is running; tooltip "Export the slides as a PDF (e in slides mode)");
   `e` in slides mode does the same. A save dialog (PDF filter, starts at `<doc stem>.pdf` in the
@@ -1678,6 +1701,16 @@ sections above. Build: BUILDING.md. Desktop behaviour is unchanged (the visual s
     the picture is sharp. Lifting one finger of a pinch continues as a drag from where that finger is, with no fling
     and no tap. A third finger is ignored. (A developer switch, a file `pinch_legacy` in the home folder, makes a pinch
     lay out at every step, to measure the difference; the log, tag `calligrus`, prints the cost per frame.)
+  - **The zoomed picture or diagram** (§27) takes every finger while it is open (`android_shell::set_lightbox_touch`; the
+    document under it gets none, so it neither scrolls nor zooms). Its own small tracker (window_android.cpp, not
+    `touch::Tracker`, which moves up and down only): **one finger drags** the picture (after the 8 dp slop, starting from
+    rest), **two fingers pinch**: the ratio of their distance is the zoom factor (the fit to 8x the natural size, §27), about
+    their **midpoint** (the picture under it stays under it), and the midpoint's movement pans too; lifting one finger
+    carries on as a drag; a third finger is ignored. Panning is clamped as on the desktop. A **tap** (up within the slop and
+    350 ms, one finger only) is a click: it closes the picture at the fit, and when zoomed in after the double-click time, so
+    that a **double tap** goes back to the fit instead. The **Back key** closes the picture (before it does anything else:
+    `shell::set_lightbox_back`, the activity's back handler asks `back_wanted`). A diagram is drawn again at the zoomed size
+    once the fingers rest (§27), within the GPU's texture limit and 64 MPx. A real mouse works as on the desktop (wheel, drag).
   - Fingers that start elsewhere (toolbar, outline, a popup, the settings window) belong to ImGui: a tap clicks the
     widget under it; a drag scrolls the **window under the finger** (a popup, the theme list, the recent files, the overflow
     menu, the outline, the settings panel, a child window: the front-most window at the touch-down, or its nearest scrollable

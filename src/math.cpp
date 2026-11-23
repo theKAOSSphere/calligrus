@@ -123,8 +123,30 @@ static bool native_mermaid_enabled() {
     return enabled;
 }
 
+using DiagramCache = std::map<std::tuple<std::string, int>, MathTex, std::less<>>;
+static DiagramCache& diagram_cache() {
+    static DiagramCache cache;
+    return cache;
+}
+
+void diagram_trim(const std::string& src, float above_scale, float keep_scale) {
+    DiagramCache& cache = diagram_cache();
+    const int above = static_cast<int>(std::lround(above_scale * 100)), keep = static_cast<int>(std::lround(keep_scale * 100));
+    for (auto it = cache.upper_bound(std::make_tuple(src, above)); it != cache.end() && std::get<0>(it->first) == src;) {
+        if (std::get<1>(it->first) == keep) {
+            ++it;
+            continue;
+        }
+        if (it->second.tex) {
+            const GLuint id = static_cast<GLuint>(it->second.tex);
+            glDeleteTextures(1, &id);
+        }
+        it = cache.erase(it);
+    }
+}
+
 const MathTex* diagram_get(const std::string& src, float scale) {
-    static std::map<std::tuple<std::string, int>, MathTex, std::less<>> cache;
+    DiagramCache& cache = diagram_cache();
     int key_scale = static_cast<int>(std::lround(scale * 100));
     if (auto it = cache.find(std::make_tuple(std::string_view(src), key_scale)); it != cache.end())
         return it->second.tex ? &it->second : nullptr;

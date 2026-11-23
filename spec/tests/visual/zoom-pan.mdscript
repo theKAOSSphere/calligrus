@@ -1,0 +1,13 @@
+# Spec 27: inside the zoomed diagram the wheel zooms about the pointer (the diagram is drawn again at that size, so it stays
+# sharp), a drag pans, `0` and a double click are back to the fit, a click without a drag closes it.
+size 900 700
+open zoom-pan.md
+shot page.png
+click 450 190
+shot fit.png
+wheel -5 300 350
+shot zoomed.png
+drag 500 350 300 380
+shot panned.png
+keys 0
+shot reset.png

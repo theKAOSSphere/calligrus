@@ -43,7 +43,7 @@ android {
         applicationId = "io.github.thekaossphere.calligrus"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
+        versionCode = 5
         versionName = cmakeVersion
 
         ndk {

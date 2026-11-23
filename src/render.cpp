@@ -547,13 +547,30 @@ float draw_table(const Ctx& c, const md::Block& b, float x, float y, float width
         }
     float sum_nat = 0, sum_min = 0;
     for (size_t i = 0; i < ncols; i++) sum_nat += nat[i], sum_min += minw[i];
-    for (size_t i = 0; i < ncols; i++) {
-        if (sum_nat <= width) w[i] = nat[i];
-        else if (sum_min >= width) w[i] = minw[i];
-        else w[i] = minw[i] + (width - sum_min) * (nat[i] - minw[i]) / (sum_nat - sum_min);
+    if (sum_nat <= width) {
+        for (size_t i = 0; i < ncols; i++) w[i] = nat[i];
+    } else if (g_export || sum_min <= width) {
+        if (sum_min >= width) {
+            for (size_t i = 0; i < ncols; i++) w[i] = minw[i];
+        } else {
+            for (size_t i = 0; i < ncols; i++)
+                w[i] = minw[i] + (width - sum_min) * (nat[i] - minw[i]) / (sum_nat - sum_min);
+        }
+    } else {
+        // Narrow screen where the table overflows even at minimum widths:
+        // scroll horizontally so columns are not crushed into unreadable slices.
+        const float max_col = std::max(width * 0.75f, 120.0f * c.fonts.scale);
+        for (size_t i = 0; i < ncols; i++) {
+            w[i] = std::max(minw[i], std::min(nat[i], max_col));
+        }
     }
     float total_w = 0;
     for (float v : w) total_w += v;
+
+    const bool scrolls = !g_export && sum_min > width;
+    const char* key = reinterpret_cast<const char*>(&b);
+    CodeScroll* state = nullptr;
+    float shift = 0.0f;
 
     auto align_of = [&](size_t i) {
         if (i >= b.aligns.size()) return HAlign::Left;
@@ -567,6 +584,7 @@ float draw_table(const Ctx& c, const md::Block& b, float x, float y, float width
     cell_base.leading = 1.45f;
     std::vector<std::vector<Layout>> lays;
     std::vector<float> row_h;
+    float table_h = 0;
     for (auto& row : cells) {
         std::vector<Layout> lr;
         float h = 0;
@@ -576,7 +594,28 @@ float draw_table(const Ctx& c, const md::Block& b, float x, float y, float width
             h = std::max(h, lr.back().height);
         }
         lays.push_back(std::move(lr));
-        row_h.push_back(h + 2 * vpad);
+        const float rh = h + 2 * vpad;
+        row_h.push_back(rh);
+        table_h += rh;
+    }
+
+    if (scrolls) {
+        state = &c.cache.code[key];
+        state->overflow = total_w - width;
+        if (c.opts.interactive && c.opts.mouse_in_view) {
+            const ImVec2 mp = ImGui::GetMousePos();
+            const bool over = mp.x >= x && mp.x < x + width && mp.y >= y && mp.y < y + table_h;
+            if (over) {
+                const ImGuiIO& io = ImGui::GetIO();
+                const float wheel = io.MouseWheelH != 0 ? -io.MouseWheelH : (io.KeyShift ? io.MouseWheel : 0.0f);
+                if (wheel != 0) {
+                    state->offset -= wheel * 40.0f * c.fonts.scale;
+                    state->scrolled_at = ImGui::GetTime();
+                }
+            }
+        }
+        state->offset = std::round(std::clamp(state->offset, 0.0f, state->overflow));
+        shift = state->offset;
     }
 
     // Where each row is (the editor's Ctrl+click -> source line).
@@ -589,14 +628,17 @@ float draw_table(const Ctx& c, const md::Block& b, float x, float y, float width
         }
     }
 
+    if (scrolls) c.dl->PushClipRect(ImVec2(x, y), ImVec2(x + width, y + table_h + 1), true);
+
     // Backgrounds, cells, grid. Row/column edges are floored to whole pixels, as egui snaps its
     // 1 px lines: a line at a fractional position would be smeared over two pixel rows.
+    const float start_x = std::round(x - shift);
     float ry = y;
     for (size_t r = 0; r < cells.size(); r++) {
         const float top = std::floor(ry), bottom = std::floor(ry + row_h[r]);
-        if (has_head && r == 0) c.dl->AddRectFilled(ImVec2(x, top), ImVec2(x + total_w, bottom), c.theme.table_head_bg);
-        else if ((r + (has_head ? 0 : 1)) % 2 == 0) c.dl->AddRectFilled(ImVec2(x, top), ImVec2(x + total_w, bottom), c.theme.zebra);
-        float cx = x;
+        if (has_head && r == 0) c.dl->AddRectFilled(ImVec2(start_x, top), ImVec2(start_x + total_w, bottom), c.theme.table_head_bg);
+        else if ((r + (has_head ? 0 : 1)) % 2 == 0) c.dl->AddRectFilled(ImVec2(start_x, top), ImVec2(start_x + total_w, bottom), c.theme.zebra);
+        float cx = start_x;
         for (size_t i = 0; i < ncols; i++) {
             // Cells copy as tab-separated values, rows as lines.
             if (c.sel) c.sel->begin_group(r == 0 && i == 0 ? Sep::Para : i == 0 ? Sep::Row : Sep::Cell);
@@ -605,21 +647,37 @@ float draw_table(const Ctx& c, const md::Block& b, float x, float y, float width
         }
         ry += row_h[r];
     }
-    auto hline = [&](float ly) { c.dl->AddRectFilled(ImVec2(x, std::floor(ly)), ImVec2(x + total_w, std::floor(ly) + 1), c.theme.rule); };
+    auto hline = [&](float ly) { c.dl->AddRectFilled(ImVec2(start_x, std::floor(ly)), ImVec2(start_x + total_w, std::floor(ly) + 1), c.theme.rule); };
     auto vline = [&](float lx) { c.dl->AddRectFilled(ImVec2(std::floor(lx), std::floor(y)), ImVec2(std::floor(lx) + 1, std::floor(ry) + 1), c.theme.rule); };
     hline(y);
     hline(ry);   // (egui's Inside stroke: the last line is the one containing the bottom edge)
-    vline(x);
-    vline(x + total_w);
+    vline(start_x);
+    vline(start_x + total_w);
     float ly = y;
     for (size_t r = 0; r + 1 < row_h.size(); r++) {
         ly += row_h[r];
         hline(ly);
     }
-    float lx = x;
+    float lx = start_x;
     for (size_t i = 0; i + 1 < ncols; i++) {
         lx += w[i];
         vline(lx);
+    }
+    if (scrolls) {
+        c.dl->PopClipRect();
+        if (c.opts.interactive) c.out.hblocks.push_back({ImVec2(x, y), ImVec2(x + width, ry), key});
+        const double age = ImGui::GetTime() - state->scrolled_at;
+        if (age < 1.2) {
+            const float pad = c.pt(4);
+            const float track_l = x + pad, track_w = width - 2 * pad;
+            const float thumb_w = std::max(c.pt(20), track_w * width / total_w);
+            const float thumb_x = std::round(track_l + (track_w - thumb_w) * (state->offset / state->overflow));
+            const float bar_bottom = ry - c.pt(2);
+            int alpha = age < 0.8 ? 153 : int(153 * (1.2 - age) / 0.4);
+            ImU32 col = (c.theme.ui.text & ~IM_COL32_A_MASK) | (ImU32(alpha) << IM_COL32_A_SHIFT);
+            c.dl->AddRectFilled(ImVec2(thumb_x, bar_bottom - c.pt(4)), ImVec2(thumb_x + thumb_w, bar_bottom), col, c.pt(2));
+            c.out.animating = true;
+        }
     }
     return ry;
 }

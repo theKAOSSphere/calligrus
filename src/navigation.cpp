@@ -208,6 +208,23 @@ ImVec2 lightbox_size(float nat_w, float nat_h, float win_w, float win_h, bool ca
     return ImVec2(std::max(nat_w * s, 1.0f), std::max(nat_h * s, 1.0f));
 }
 
+float lightbox_max_zoom(float fit_scale) { return std::max(1.0f, kLightboxMaxView / std::max(fit_scale, 1e-6f)); }
+
+ImVec2 lightbox_clamp_pan(ImVec2 pan, float shown_w, float shown_h, float win_w, float win_h) {
+    auto axis = [](float p, float shown, float win) {
+        if (shown <= win) return 0.0f;
+        const float limit = (shown - win) / 2 + win * kLightboxPanSlack;
+        return std::clamp(p, -limit, limit);
+    };
+    return ImVec2(axis(pan.x, shown_w, win_w), axis(pan.y, shown_h, win_h));
+}
+
+float lightbox_raster_cap(float px_w, float px_h, int max_texture) {
+    const double w = std::max(px_w, 1.0f), h = std::max(px_h, 1.0f);
+    const double k = std::min({max_texture / w, max_texture / h, std::sqrt(kLightboxMaxPixels / (w * h))});
+    return float(std::floor(k * 0.99 * 100) / 100);  // (a hair under, rounded down to the cache's 1/100 steps)
+}
+
 float Autoscroll::scroll_delta(float mouse_y, float dt) const {
     return active_ ? autoscroll_velocity(mouse_y - ay_) * dt : 0.0f;
 }

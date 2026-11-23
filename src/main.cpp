@@ -485,6 +485,22 @@ struct DocState {
     std::string press_link;    // link under the mouse when the button went down
     std::optional<LinkHit> press_zoom;  // picture / diagram under the mouse when it went down (spec 27)
     std::optional<LinkHit> lightbox;    // the picture / diagram shown zoomed (spec 27)
+    // Zooming and panning inside it (spec 27): reset every time it opens.
+    struct LightboxView {
+        float zoom = 1.0f;           // 1 = fitted to the window (nav::lightbox_size)
+        ImVec2 pan{0, 0};            // the picture's centre minus the fitted centre (px)
+        float k = 0;                 // a diagram: the factor its bitmap is drawn at (0: not yet); follows the zoom once it rests
+        double zoom_at = -1;         // when the zoom last changed
+        bool press = false;          // a press that began in the lightbox is under way...
+        bool moved = false;          // ...and went past the drag threshold (so it is a pan, not a click)
+        double close_at = 0;         // a click while zoomed in closes after the double-click time (a double click resets the view)
+        float base_scale = 0;        // a diagram: the scale of its first bitmap (the page's own one)
+        std::string trim_src;        // after closing: the diagram whose zoomed bitmaps are to be dropped (next frame)
+        float trim_base = 0;
+        void reset() {
+            zoom = 1.0f, pan = ImVec2(0, 0), k = 0, zoom_at = -1, press = moved = false, close_at = 0;
+        }
+    } lbv;
     std::string menu_math;     // the formula under the mouse when the right-click menu opened ("" = none)
     std::string toast;         // a short note at the bottom of the view ("Copied $x^2$")...
     double toast_since = 0;    // ...and when it appeared
@@ -2028,11 +2044,40 @@ static void draw_toast(DocState& st, const Fonts& fonts, const Theme& theme, ImV
 
 // The zoomed picture or diagram (spec 27, render.rs `paint_lightbox`), over the whole window: the
 // window dimmed (black at 80%), the picture as big as fits (nav::lightbox_size) on a card of the
-// page's colour, the alt text under it. A click anywhere closes it (Esc too, in the key handling).
+// page's colour, the alt text under it. A click (no drag) closes it (Esc too, in the key handling).
+// Inside it: the wheel zooms about the pointer, a drag pans, a double click is back to the fit, the keys + - 0
+// (Android: a pinch and a one-finger drag, a tap closes, Back too). A diagram is drawn again at the zoomed size.
 // A window of its own, so the document under it gets no hover or clicks.
+static int gl_max_texture_size() {
+    static const int n = [] {
+        GLint v = 0;
+        glGetIntegerv(GL_MAX_TEXTURE_SIZE, &v);
+        return v > 0 ? int(v) : 4096;
+    }();
+    return n;
+}
+
+static void close_lightbox(DocState& st) {
+    if (st.lightbox && st.lightbox->zoom != 1 && st.lbv.base_scale > 0) st.lbv.trim_src = st.lightbox->zoom_src, st.lbv.trim_base = st.lbv.base_scale;
+    st.lightbox.reset();
+    st.lbv.reset();
+}
+
 static void draw_lightbox(DocState& st, const Fonts& fonts, const Theme& theme, float scale) {
-    if (!st.lightbox) return;
+    // The zoomed bitmaps of a diagram just closed (the frame that drew them has been rendered by now).
+    if (!st.lbv.trim_src.empty()) {
+        diagram_trim(st.lbv.trim_src, st.lbv.trim_base, 0.0f);
+        st.lbv.trim_src.clear();
+    }
+    if (!st.lightbox) {
+#ifdef __ANDROID__
+        shell::set_lightbox_back(false);
+        android_shell::set_lightbox_touch(false);
+#endif
+        return;
+    }
     const LinkHit& lb = *st.lightbox;
+    DocState::LightboxView& v = st.lbv;
     const ImGuiViewport* vp = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(vp->Pos);
     ImGui::SetNextWindowSize(vp->Size);
@@ -2044,9 +2089,17 @@ static void draw_lightbox(DocState& st, const Fonts& fonts, const Theme& theme, 
     ImGui::PopStyleVar(3);
     ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
     ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImGuiIO& io = ImGui::GetIO();
+    const double now = ImGui::GetTime();
     const ImVec2 o = vp->Pos, sz = vp->Size;
     dl->AddRectFilled(o, ImVec2(o.x + sz.x, o.y + sz.y), IM_COL32(0, 0, 0, 204));
-    const bool close = ImGui::IsWindowHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+    bool close = false;
+    bool pending = false;  // something is still to happen on its own (a delayed close, the sharp bitmap): keep drawing
+#ifdef __ANDROID__
+    shell::set_lightbox_back(true);  // (Back closes it, spec 35; fingers belong to it)
+    android_shell::set_lightbox_touch(true);
+    if (shell::take_lightbox_back()) close = true;
+#endif
     // The picture's natural size (points) and texture.
     const std::string caption = lb.zoom == 1 ? lb.zoom_alt : "";
     float nat_w = 0, nat_h = 0;
@@ -2057,37 +2110,103 @@ static void draw_lightbox(DocState& st, const Fonts& fonts, const Theme& theme, 
         if ((img = image_get(fs::path(u8)))) nat_w = img->w, nat_h = img->h;
     } else if ((nat_d = diagram_get(lb.zoom_src, 1.05f * scale))) {
         nat_w = nat_d->px_w / scale, nat_h = nat_d->px_h / scale;
+        v.base_scale = 1.05f * scale;
     }
     if (nat_w > 0) {
         const float max = lb.zoom == 1 ? nav::kLightboxMaxPicture : nav::kLightboxMaxDiagram;
         const ImVec2 s = nav::lightbox_size(nat_w, nat_h, sz.x / scale, sz.y / scale, !caption.empty(), max);
-        const float w = std::round(s.x * scale), h = std::round(s.y * scale), pad = nav::kLightboxPad * scale;
-        const float block_h = h + 2 * pad + (caption.empty() ? 0.0f : nav::kLightboxCaption * scale);
-        const ImVec2 card(std::round(o.x + sz.x / 2 - w / 2 - pad), std::round(o.y + sz.y / 2 - block_h / 2));
-        const ImVec2 card_max(card.x + w + 2 * pad, card.y + h + 2 * pad);
+        const float h = std::round(s.y * scale), pad = nav::kLightboxPad * scale;
+        const float cap_h = caption.empty() ? 0.0f : nav::kLightboxCaption * scale;
+        const ImVec2 mid(o.x + sz.x / 2, o.y + sz.y / 2 - cap_h / 2);  // where the fitted picture's centre is
+        const float zmax = nav::lightbox_max_zoom(s.x / nat_w);
+
+        // Zoom about a point of the window: the picture's point under it stays there.
+        auto zoom_about = [&](ImVec2 q, float factor) {
+            const float nz = std::clamp(v.zoom * factor, 1.0f, zmax), k = nz / v.zoom;
+            if (nz == v.zoom) return;
+            v.pan = ImVec2(q.x + (mid.x + v.pan.x - q.x) * k - mid.x, q.y + (mid.y + v.pan.y - q.y) * k - mid.y);
+            v.zoom = nz, v.zoom_at = now;
+        };
+        const ImVec2 win_mid(o.x + sz.x / 2, o.y + sz.y / 2);
+        const bool in = ImGui::IsWindowHovered();
+        // The wheel (smooth: every notch is x1.15) and the keys.
+        if (in && io.MouseWheel != 0) zoom_about(io.MousePos, std::pow(nav::kLightboxWheelStep, io.MouseWheel));
+        if (ImGui::IsKeyPressed(ImGuiKey_Equal) || ImGui::IsKeyPressed(ImGuiKey_KeypadAdd)) zoom_about(win_mid, nav::kLightboxKeyStep);
+        if (ImGui::IsKeyPressed(ImGuiKey_Minus) || ImGui::IsKeyPressed(ImGuiKey_KeypadSubtract)) zoom_about(win_mid, 1.0f / nav::kLightboxKeyStep);
+        if (ImGui::IsKeyPressed(ImGuiKey_0, false) || ImGui::IsKeyPressed(ImGuiKey_Keypad0, false)) v.zoom = 1.0f, v.pan = ImVec2(0, 0), v.zoom_at = now;
+#ifdef __ANDROID__
+        {  // two fingers zoom about their midpoint (which also pans), one finger pans
+            const android_shell::LightboxTouch t = android_shell::take_lightbox_touch();
+            if (t.zoom != 1.0f) zoom_about(ImVec2(t.focus_x - t.dx, t.focus_y - t.dy), t.zoom);
+            v.pan.x += t.dx, v.pan.y += t.dy;
+        }
+#endif
+        // The mouse: a press that goes past the drag threshold pans; one that does not is a click (which closes it).
+        if (in && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+            v.press = true, v.moved = false;
+            v.close_at = 0;
+            if (io.MouseClickedCount[ImGuiMouseButton_Left] == 2) {  // a double click: back to the fit
+                v.zoom = 1.0f, v.pan = ImVec2(0, 0), v.zoom_at = now;
+                v.press = false;
+            }
+        }
+        if (v.press && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+            const float dx = io.MousePos.x - io.MouseClickedPos[ImGuiMouseButton_Left].x, dy = io.MousePos.y - io.MouseClickedPos[ImGuiMouseButton_Left].y;
+            if (v.moved) v.pan.x += io.MouseDelta.x, v.pan.y += io.MouseDelta.y;
+            else if (dx * dx + dy * dy > io.MouseDragThreshold * io.MouseDragThreshold) v.moved = true;
+        }
+        if (v.press && ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+            if (!v.moved) {
+                if (v.zoom > 1.0005f) v.close_at = now + io.MouseDoubleClickTime;  // (maybe the first click of a double click)
+                else close = true;
+            }
+            v.press = false;
+        }
+        if (v.close_at > 0) {
+            if (now >= v.close_at) close = true;
+            else pending = true;
+        }
+        // Where it is now: no further than the clamp allows, centred when it is smaller than the window.
+        const float dw = std::round(s.x * scale * v.zoom), dh = std::round(s.y * scale * v.zoom);
+        v.pan = nav::lightbox_clamp_pan(v.pan, dw, dh, sz.x, sz.y);
+        const ImVec2 card(std::round(mid.x + v.pan.x - dw / 2 - pad), std::round(mid.y + v.pan.y - dh / 2 - pad));
+        const ImVec2 card_max(card.x + dw + 2 * pad, card.y + dh + 2 * pad);
         dl->AddRectFilled(card, card_max, theme.bg, 6 * scale);
-        const ImVec2 p(card.x + pad, card.y + pad), q(p.x + w, p.y + h);
+        const ImVec2 p(card.x + pad, card.y + pad), q(p.x + dw, p.y + dh);
         if (img) {
             dl->AddImage(img->tex, p, q);
-        } else {  // drawn again at the zoomed size (half steps), so it stays sharp
-            const float k = std::max(1.0f, std::ceil(s.x / nat_w * 2) / 2);
-            const MathTex* d = diagram_get(lb.zoom_src, 1.05f * scale * k);
+        } else {  // drawn again at the zoomed size (half steps), so it stays sharp; not above what the GPU takes
+            float want = std::max(1.0f, std::ceil(s.x * v.zoom / nat_w * 2) / 2);
+            want = std::max(1.0f, std::min(want, nav::lightbox_raster_cap(nat_d->px_w, nat_d->px_h, gl_max_texture_size())));
+            // While the zoom is moving the bitmap on screen is only scaled; the new one comes when it rests for a moment.
+            if (v.k == 0 || (want != v.k && now - v.zoom_at >= 0.15)) {
+                if (v.k != want) {
+                    v.k = want;
+                    if (v.k > 1.0f) diagram_trim(lb.zoom_src, v.base_scale, 1.05f * scale * v.k);  // (the earlier zoomed bitmaps go)
+                }
+            } else if (want != v.k) {
+                pending = true;
+            }
+            const MathTex* d = diagram_get(lb.zoom_src, 1.05f * scale * v.k);
             if (!d) d = nat_d;
             dl->AddImage(d->tex, p, q, ImVec2(0, 0), ImVec2(1, 1), theme.text);
         }
-        if (!caption.empty()) {
+        if (!caption.empty()) {  // (under the fitted card; over the picture, on a dark pill, when it is zoomed in)
             const float em = 15.0f * scale;
             const float size = fonts.px(fonts.regular, em), adv = fonts.advance_scale(fonts.regular, em);
             float asc = 0, desc = 0;
             font_metrics(fonts, fonts.regular, em, asc, desc);
             const float tw = text_width(fonts.regular, size, adv, caption);
-            draw_text(dl, fonts.regular, size, adv,
-                      ImVec2(std::round(o.x + sz.x / 2 - tw / 2), std::round(card_max.y + (nav::kLightboxCaption * scale - asc - desc) / 2 + 4 * scale)),
-                      IM_COL32(225, 225, 225, 255), caption);
+            const float fit_bottom = std::round(mid.y - h / 2 - pad) + h + 2 * pad;
+            const ImVec2 at(std::round(o.x + sz.x / 2 - tw / 2), std::round(fit_bottom + (nav::kLightboxCaption * scale - asc - desc) / 2 + 4 * scale));
+            if (v.zoom > 1.0005f)
+                dl->AddRectFilled(ImVec2(at.x - 8 * scale, at.y - 3 * scale), ImVec2(at.x + tw + 8 * scale, at.y + asc + desc + 3 * scale), IM_COL32(0, 0, 0, 170), 6 * scale);
+            draw_text(dl, fonts.regular, size, adv, at, IM_COL32(225, 225, 225, 255), caption);
         }
     }
     ImGui::End();
-    if (close) st.lightbox.reset();
+    if (pending) st.animating = true;
+    if (close) close_lightbox(st);
 }
 
 // Mouse and keyboard in the document view: link hover/clicks and text selection
@@ -2167,7 +2286,7 @@ static void handle_doc_input(DocState& st, const RenderResult& r, float view_top
         st.goto_press = false;
         if (!st.press_link.empty()) st.link_request = st.press_link, st.link_new_tab = st.press_new_tab;
         st.press_link.clear();
-        if (st.press_zoom) st.lightbox = std::move(st.press_zoom), st.sel.clear();
+        if (st.press_zoom) st.lightbox = std::move(st.press_zoom), st.lbv.reset(), st.sel.clear();
         st.press_zoom.reset();
         st.selecting = false;
     }
@@ -3593,6 +3712,9 @@ int main() {
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
+    // Ctrl+Tab / Ctrl+Shift+Tab are Calligrus's tab switch (see IsKeyChordPressed below); ImGui's own window list would pop up on them too.
+    ImGui::GetCurrentContext()->ConfigNavWindowingKeyNext = 0;
+    ImGui::GetCurrentContext()->ConfigNavWindowingKeyPrev = 0;
     ImGuiIO& io = ImGui::GetIO();
     io.IniFilename = nullptr;                   // don't litter imgui.ini next to the exe
     io.ConfigInputTextEnterKeepActive = true;   // the find field keeps focus after Enter
@@ -3835,6 +3957,8 @@ int main() {
         glfwSetWindowSizeCallback(presenter.win, [](GLFWwindow*, int, int) { g_input = true; });
         glfwSetWindowRefreshCallback(presenter.win, [](GLFWwindow*) { g_input = true; });
         presenter.ctx = ImGui::CreateContext(ImGui::GetIO().Fonts);
+        presenter.ctx->ConfigNavWindowingKeyNext = 0;  // (no ImGui window list here either; see the main context)
+        presenter.ctx->ConfigNavWindowingKeyPrev = 0;
         ImGui::SetCurrentContext(presenter.ctx);
         ImGui::GetIO().IniFilename = nullptr;
         glfwMakeContextCurrent(presenter.win);
@@ -5085,7 +5209,7 @@ int main() {
         Config& cfg_w = conf.cfg;  // (writable: zoom keys)
         // A zoomed picture (spec 27) takes the keys: Esc closes it, nothing else reacts.
         const bool zoomed = st.lightbox.has_value();
-        if (zoomed && ImGui::IsKeyPressed(ImGuiKey_Escape, false)) st.lightbox.reset();
+        if (zoomed && ImGui::IsKeyPressed(ImGuiKey_Escape, false)) close_lightbox(st);
         // An open popup or menu (recent files, PDF menu, theme combo, right-click menu) owns the keys
         // too: j/k/arrows move its selection and must not also scroll the document.
         const bool popup_open = ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel);
@@ -5139,7 +5263,7 @@ int main() {
         // Zoom (spec 1): Ctrl+= / Ctrl++ / numpad +, Ctrl+-, Ctrl+0, Ctrl+wheel.
         int zoom_steps = 0;
         bool zoom_reset = false;
-        if (io.KeyCtrl && !slides.on) {
+        if (io.KeyCtrl && !slides.on && !zoomed) {  // (a zoomed picture keeps the wheel and the keys: draw_lightbox)
             if (ImGui::IsKeyPressed(ImGuiKey_Equal) || ImGui::IsKeyPressed(ImGuiKey_KeypadAdd)) zoom_steps++;
             if (ImGui::IsKeyPressed(ImGuiKey_Minus) || ImGui::IsKeyPressed(ImGuiKey_KeypadSubtract)) zoom_steps--;
             if (ImGui::IsKeyPressed(ImGuiKey_0, false) || ImGui::IsKeyPressed(ImGuiKey_Keypad0, false)) zoom_reset = true;
@@ -5515,7 +5639,15 @@ int main() {
             draw_text(frame_dl, fonts.regular, size, adv, ImVec2(o.x + pad_x, o.y + (h - size) * 0.5f), theme.ui.weak, "Saved copy, may be out of date");
             const float bw = std::round(80.0f * scale), bh = std::round(h - 6.0f * scale);
             ImGui::SetCursorScreenPos(ImVec2(o.x + work_size.x - bw - pad_x, o.y + std::round((h - bh) * 0.5f)));
-            if (ImGui::Button("Reopen##stale", ImVec2(bw, bh))) shell::show_open_picker(to_utf8(st.path));  // (the picked file replaces this tab)
+            if (ImGui::Button("##stale", ImVec2(bw, bh))) shell::show_open_picker(to_utf8(st.path));  // (the picked file replaces this tab)
+            {
+                // The label is drawn here, not by Button: ImGui centres its text from its own rounded metrics, which left
+                // "Reopen" a pixel low. This uses the bar's line box, the same as "Saved copy" beside it.
+                const ImVec2 bmin = ImGui::GetItemRectMin();
+                const float lsize = fonts.px(fonts.regular, em), ladv = fonts.advance_scale(fonts.regular, em);
+                const float lw = text_width(fonts.regular, lsize, ladv, "Reopen");
+                draw_text(frame_dl, fonts.regular, lsize, ladv, ImVec2(std::round(bmin.x + (bw - lw) * 0.5f), bmin.y + std::round((bh - lsize) * 0.5f)), ImGui::GetColorU32(ImGuiCol_Text), "Reopen");
+            }
             ImGui::SetCursorScreenPos(ImVec2(o.x, o.y + h));
         }
 #endif

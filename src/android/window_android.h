@@ -151,6 +151,17 @@ void set_doc_region(float x0, float y0, float x1, float y1, bool ui_only);
 // Settings window open: fingers outside the document act as a plain mouse (press, drag, release), so
 // sliders can be dragged; otherwise they tap and scroll lists.
 void set_raw_touch(bool raw);
+// The zoomed picture (spec 27, 35) is open: every finger belongs to it. One finger drags (pan), two pinch (zoom about their
+// midpoint, the midpoint's movement pans too), a short touch that did not move is a tap (a click, which closes it).
+// `take_lightbox_touch` gives what happened since the last call (pan in px, zoom as a factor, the pinch midpoint now).
+struct LightboxTouch {
+    float dx = 0, dy = 0;
+    float zoom = 1.0f;
+    bool pinching = false;
+    float focus_x = 0, focus_y = 0;
+};
+void set_lightbox_touch(bool on);
+LightboxTouch take_lightbox_touch();
 // A finger is down, a fling or a tap is still being delivered: keep drawing frames.
 bool touch_busy();
 // Light status bar icons for a light theme, dark for a dark one.

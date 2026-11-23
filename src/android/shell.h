@@ -49,6 +49,9 @@ std::optional<SourceState> take_source_state();
 // then Back does not leave the app, it is queued for `take_back` (main thread).
 void set_back_wanted(bool wanted);
 bool take_back();
+// The zoomed picture (spec 27) is open: Back closes it (`take_lightbox_back`), before the tab list gets it.
+void set_lightbox_back(bool wanted);
+bool take_lightbox_back();
 bool back_wanted();                                         // (the Java side asks)
 void press_back();
 void post_source_state(const std::string& path, bool stale);  // (the Java side tells)

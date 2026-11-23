@@ -55,6 +55,19 @@ static void test_zoom() {
         ImVec2 d = lightbox_size(50, 40, 10, 10, false, 4);
         check(near(d.x, 1) && near(d.y, 1), "lightbox: never below 1");
     }
+    {  // zoom and pan inside the zoomed picture
+        check(near(lightbox_max_zoom(0.25f), 32.0f) && near(lightbox_max_zoom(3.0f), 8.0f / 3.0f) && near(lightbox_max_zoom(20.0f), 1.0f),
+              "lightbox view: at most 8x the natural size, never below the fit");
+        ImVec2 a = lightbox_clamp_pan(ImVec2(500, 500), 300, 200, 1000, 700);
+        check(near(a.x, 0) && near(a.y, 0), "lightbox pan: a picture smaller than the window stays centred");
+        ImVec2 b = lightbox_clamp_pan(ImVec2(5000, -5000), 4000, 3000, 1000, 700);
+        check(near(b.x, 1750) && near(b.y, -1325), "lightbox pan: an edge may come 1/4 of the window in, no further");
+        ImVec2 c = lightbox_clamp_pan(ImVec2(100, 3000), 4000, 600, 1000, 700);
+        check(near(c.x, 100) && near(c.y, 0), "lightbox pan: each axis on its own");
+        check(near(lightbox_raster_cap(1000, 500, 16384), 11.2f, 0.02f) && near(lightbox_raster_cap(1000, 500, 4096), 4.05f, 0.02f),
+              "lightbox raster: the texture limit and the pixel budget (64 MPx) bound the factor");
+        check(lightbox_raster_cap(30000, 400, 16384) < 1.0f, "lightbox raster: below 1 for a huge diagram");
+    }
     check(near(clamp_zoom(NAN), 1.0f), "NaN zoom -> 1.0");
 }
 

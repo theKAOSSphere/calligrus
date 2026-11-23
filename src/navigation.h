@@ -38,6 +38,22 @@ constexpr float kLightboxMaxPicture = 4.0f, kLightboxMaxDiagram = 3.0f;
 // at most `max_scale` times its natural size. Never below 1.
 ImVec2 lightbox_size(float nat_w, float nat_h, float win_w, float win_h, bool caption, float max_scale);
 
+// Zooming inside the zoomed picture (spec 27): the view's zoom is 1 = the fit above, up to `lightbox_max_zoom`, so that the
+// picture is at most kLightboxMaxView times its natural size on screen (never below 1). A wheel notch multiplies the zoom
+// by kLightboxWheelStep, a `+` / `-` key press by kLightboxKeyStep.
+constexpr float kLightboxMaxView = 8.0f, kLightboxWheelStep = 1.15f, kLightboxKeyStep = 1.25f;
+float lightbox_max_zoom(float fit_scale);  // fit_scale = the fitted picture's size over its natural size
+// Dragging the picture around: along an axis where the picture is smaller than the window it stays centred; along one where
+// it is larger, its centre may move until an edge has come kLightboxPanSlack of the window's size in from the window's edge
+// (so it can never be dragged entirely off screen). `pan` = the picture's centre minus the window's centre (px).
+constexpr float kLightboxPanSlack = 0.25f;
+ImVec2 lightbox_clamp_pan(ImVec2 pan, float shown_w, float shown_h, float win_w, float win_h);
+// A diagram is drawn again at the zoomed size, as a bitmap of `k` times its first bitmap's size (px_w x px_h). The most
+// `k` may be so that neither side passes the GPU's texture limit and the bitmap stays within kLightboxMaxPixels
+// (64 MPx = 256 MB of RGBA); above it the bitmap is just scaled (a little soft). May be below 1 for a huge diagram.
+constexpr double kLightboxMaxPixels = 64.0e6;
+float lightbox_raster_cap(float px_w, float px_h, int max_texture);
+
 // ---------------------------------------------------------------------------
 // Vim-style keys (spec 2)
 // ---------------------------------------------------------------------------

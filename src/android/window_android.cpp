@@ -310,9 +310,117 @@ void scroll_list_window(float dy) {
     if (end) g_ui->stop_fling();
 }
 
+// The zoomed picture (spec 27): its own small gesture tracker (the document's one only moves up and down). Up to two fingers;
+// the slop and the tap time are the same as everywhere (touch::Params).
+bool g_lightbox = false;
+struct LbFinger {
+    int id = -1;
+    float x = 0, y = 0;
+};
+LbFinger g_lb_f[2];
+int g_lb_n = 0;
+bool g_lb_moved = false;  // a finger went past the slop (no tap any more)
+bool g_lb_multi = false;  // a second finger touched during this gesture (no tap)
+float g_lb_sx = 0, g_lb_sy = 0;
+double g_lb_t0 = 0;
+android_shell::LightboxTouch g_lb_out;
+
+int lb_find(int id) {
+    for (int i = 0; i < g_lb_n; i++)
+        if (g_lb_f[i].id == id) return i;
+    return -1;
+}
+
+void lb_centre(float& cx, float& cy, float& dist) {
+    if (g_lb_n == 2) {
+        cx = (g_lb_f[0].x + g_lb_f[1].x) / 2, cy = (g_lb_f[0].y + g_lb_f[1].y) / 2;
+        dist = std::hypot(g_lb_f[0].x - g_lb_f[1].x, g_lb_f[0].y - g_lb_f[1].y);
+    } else {
+        cx = g_lb_f[0].x, cy = g_lb_f[0].y, dist = 0;
+    }
+}
+
+void handle_lightbox_motion(const GameActivityMotionEvent& e) {
+    const int action = e.action & AMOTION_EVENT_ACTION_MASK;
+    const int index = (e.action & AMOTION_EVENT_ACTION_POINTER_INDEX_MASK) >> AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT;
+    const double t = event_time(e.eventTime);
+    const touch::Params p = touch::Params::for_density(density());
+    auto pos = [&](int i, float& x, float& y) {
+        x = GameActivityPointerAxes_getX(&e.pointers[i]);
+        y = GameActivityPointerAxes_getY(&e.pointers[i]);
+    };
+    float x = 0, y = 0;
+    switch (action) {
+        case AMOTION_EVENT_ACTION_DOWN:
+        case AMOTION_EVENT_ACTION_POINTER_DOWN:
+            if (index >= int(e.pointerCount)) return;
+            pos(index, x, y);
+            if (action == AMOTION_EVENT_ACTION_DOWN) {
+                g_lb_n = 0, g_lb_moved = g_lb_multi = false, g_lb_sx = x, g_lb_sy = y, g_lb_t0 = t;
+            }
+            if (g_lb_n >= 2) return;  // (a third finger is ignored)
+            g_lb_f[g_lb_n++] = {e.pointers[index].id, x, y};
+            if (g_lb_n == 2) g_lb_multi = g_lb_moved = true;
+            if (g_lb_n == 2) {
+                float cx, cy, d;
+                lb_centre(cx, cy, d);
+                g_lb_out.pinching = true, g_lb_out.focus_x = cx, g_lb_out.focus_y = cy;
+            }
+            break;
+        case AMOTION_EVENT_ACTION_MOVE: {
+            if (g_lb_n == 0) return;
+            float ocx, ocy, od;
+            lb_centre(ocx, ocy, od);
+            for (uint32_t i = 0; i < e.pointerCount; i++) {
+                const int k = lb_find(e.pointers[i].id);
+                if (k >= 0) pos(int(i), g_lb_f[k].x, g_lb_f[k].y);
+            }
+            float cx, cy, d;
+            lb_centre(cx, cy, d);
+            if (g_lb_n == 2) {
+                if (od > 1.0f && d > 1.0f) g_lb_out.zoom *= d / od;
+                g_lb_out.dx += cx - ocx, g_lb_out.dy += cy - ocy;
+                g_lb_out.focus_x = cx, g_lb_out.focus_y = cy;
+            } else if (!g_lb_moved) {
+                if (std::hypot(cx - g_lb_sx, cy - g_lb_sy) > p.slop) g_lb_moved = true;  // (the picture starts from rest: no jump)
+            } else {
+                g_lb_out.dx += cx - ocx, g_lb_out.dy += cy - ocy;
+            }
+            break;
+        }
+        case AMOTION_EVENT_ACTION_UP:
+        case AMOTION_EVENT_ACTION_POINTER_UP: {
+            if (index >= int(e.pointerCount)) return;
+            const int k = lb_find(e.pointers[index].id);
+            if (action == AMOTION_EVENT_ACTION_UP || g_lb_n <= 1) {
+                if (!g_lb_moved && !g_lb_multi && t - g_lb_t0 <= p.tap_max_s) {
+                    pos(index, x, y);
+                    g_clicks.push_back({x, y});
+                }
+                g_lb_n = 0;
+                g_lb_out.pinching = false;
+            } else if (k >= 0) {  // one finger of a pinch lifts: the other carries on as a drag
+                g_lb_f[k] = g_lb_f[1 - k];
+                g_lb_n = 1;
+                g_lb_out.pinching = false;
+            }
+            break;
+        }
+        case AMOTION_EVENT_ACTION_CANCEL:
+            g_lb_n = 0;
+            g_lb_out.pinching = false;
+            break;
+        default: break;
+    }
+}
+
 void handle_motion(const GameActivityMotionEvent& e) {
     if (is_mouse(e)) {
         handle_mouse(e);
+        return;
+    }
+    if (g_lightbox || g_lb_n > 0) {
+        handle_lightbox_motion(e);
         return;
     }
     const int action = e.action & AMOTION_EVENT_ACTION_MASK;
@@ -767,8 +875,19 @@ void set_doc_region(float x0, float y0, float x1, float y1, bool ui_only) {
 
 void set_raw_touch(bool raw) { g_raw = raw; }
 
+void set_lightbox_touch(bool on) {
+    g_lightbox = on;
+    if (!on && g_lb_n == 0) g_lb_out = LightboxTouch();
+}
+
+LightboxTouch take_lightbox_touch() {
+    LightboxTouch r = g_lb_out;
+    g_lb_out.dx = g_lb_out.dy = 0, g_lb_out.zoom = 1.0f;
+    return r;
+}
+
 bool touch_busy() {
-    return (g_doc && g_doc->busy()) || (g_ui && g_ui->busy()) || (g_h && g_h->busy()) || g_click_phase != 0 || g_press_phase != 0 || !g_clicks.empty() || g_hover_dirty || g_rawdrag;
+    return (g_doc && g_doc->busy()) || (g_ui && g_ui->busy()) || (g_h && g_h->busy()) || g_lb_n > 0 || g_click_phase != 0 || g_press_phase != 0 || !g_clicks.empty() || g_hover_dirty || g_rawdrag;
 }
 
 void set_light_bars(bool light) { shell::set_light_bars(light); }

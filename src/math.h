@@ -29,3 +29,8 @@ void math_draw(ImDrawList* dl, const MathTex& m, ImVec2 p0, ImU32 col);
 // Rendered (and cached) Mermaid diagram at `scale` pixels per diagram unit
 // (only px_w/px_h are meaningful); nullptr if it couldn't be drawn.
 const MathTex* diagram_get(const std::string& src, float scale);
+
+// Forgets (and frees the textures of) the bitmaps of the diagram `src` drawn at a scale above `above_scale`, except the one
+// at `keep_scale` (0: none). The zoomed picture (spec 27) draws a diagram again at every size it is zoomed to; the ones it has
+// left behind are dropped. Not while a frame that draws them is still to be rendered.
+void diagram_trim(const std::string& src, float above_scale, float keep_scale);
