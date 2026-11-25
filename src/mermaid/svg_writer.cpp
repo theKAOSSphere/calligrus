@@ -26,8 +26,10 @@ std::string F(float v) { return fmt_shortest(v); }       // Rust "{}"
 std::string F2(float v) { return fmt_fixed(v, 2); }      // Rust "{:.2}"
 std::string F3(float v) { return fmt_fixed(v, 3); }      // Rust "{:.3}"
 
-std::string escape_xml(const std::string& in) {
+std::string escape_xml(const std::string& in_raw) {
     std::string out;
+    // (a TeX label line seen by anything but the text writer below is its plain-text approximation)
+    const std::string in = in_raw.find(kMathOpen) == std::string::npos ? in_raw : math_marker_plain(in_raw);
     for (char c : in) {
         switch (c) {
         case '&': out += "&amp;"; break;
@@ -278,7 +280,10 @@ std::string text_block_svg_with_font_size_weight(float x, float y, const TextBlo
     for (size_t idx = 0; idx < label.lines.size(); ++idx) {
         float dy = idx == 0 ? 0.0f : line_height;
         std::string rendered = is_divider_line(label.lines[idx]) ? std::string() : escape_xml(label.lines[idx]);
-        text += "<tspan x=\"" + F2(x) + "\" dy=\"" + F2(dy) + "\">" + rendered + "</tspan>";
+        // A TeX label line: the plain text stays as the fallback, `data-tex` asks the rasteriser to draw the formula.
+        std::string tex_attr;
+        if (std::string tex; is_math_marker_line(label.lines[idx], &tex)) tex_attr = " data-tex=\"" + escape_xml(tex) + "\"";
+        text += "<tspan x=\"" + F2(x) + "\" dy=\"" + F2(dy) + "\"" + tex_attr + ">" + rendered + "</tspan>";
     }
     text += "</text>";
     return text;

@@ -24,6 +24,7 @@
 #include <stb_image.h>
 #include "ir.h"
 #include "strutil.h"
+#include "text.h"
 
 namespace mermaid {
 
@@ -1117,7 +1118,9 @@ texmath::Path device_path(const VPath& vp, const Mat& m, bool close_subpaths) {
 
 class Renderer {
 public:
-    Renderer(Canvas& canvas, const FontSet& fonts) : cv_(&canvas), fonts_(fonts) {}
+    // `colour` (optional): a second transparent canvas for the colour layer (see rasterize_svg). Chromatic paints
+    // go there; neutral ones (black text and lines, white, greys) stay on `canvas`, the white-ink mask.
+    Renderer(Canvas& canvas, const FontSet& fonts, Canvas* colour = nullptr) : cv_(&canvas), cc_(colour), fonts_(fonts) {}
 
     // Remember every element that has an id (markers are looked up by it).
     void index_ids(const XNode& n) {
@@ -1148,9 +1151,18 @@ public:
         layer.clip = cv_->clip;
         Canvas* parent_canvas = cv_;
         cv_ = &layer;
+        std::optional<Canvas> colour_layer;  // the same group on the colour canvas
+        Canvas* parent_colour = cc_;
+        if (cc_) {
+            colour_layer.emplace(cc_->w, cc_->h);
+            colour_layer->clip = cc_->clip;
+            cc_ = &*colour_layer;
+        }
         draw_styled(n, st);
         cv_ = parent_canvas;
+        cc_ = parent_colour;
         cv_->composite(layer, opacity, multiply);
+        if (cc_) cc_->composite(*colour_layer, opacity, multiply);
     }
 
 private:
@@ -1210,7 +1222,15 @@ private:
     }
 
     Canvas* cv_;
+    Canvas* cc_;  // colour layer or null
     const FontSet& fonts_;
+
+    // Which canvas a paint goes to: with a colour layer, gradients and any colour that is not a pure grey (r == g == b)
+    // are drawn there in their own colours; black, white and greys stay in the ink mask.
+    Canvas& target(const Paint& p) const {
+        if (!cc_) return *cv_;
+        return (!p.url.empty() || (!p.none && !(p.rgb.r == p.rgb.g && p.rgb.g == p.rgb.b))) ? *cc_ : *cv_;
+    }
     std::map<std::string, const XNode*> ids_;
 
     // ---- markers (resvg usvg/src/parser/marker.rs) ----
@@ -1298,13 +1318,16 @@ private:
         VPath clip_vp = rect_path(clip_rect[0], clip_rect[1], clip_rect[2], clip_rect[3], 0, 0);
         texmath::Path clip_path = device_path(clip_vp, content, true);
         const texmath::Path* saved_clip = cv_->clip;
+        const texmath::Path* saved_colour_clip = cc_ ? cc_->clip : nullptr;
         cv_->clip = &clip_path;
+        if (cc_) cc_->clip = &clip_path;
         Style base;
         base.ctm = content;
         Style marker_style = styled(base, marker);
         marker_style.ctm = content;  // the marker's own transform attribute does not exist; keep the placement
         for (const XNode& c : marker.children) draw(c, marker_style);
         cv_->clip = saved_clip;
+        if (cc_) cc_->clip = saved_colour_clip;
     }
 
     void draw_markers(const VPath& vp, const Style& st) {
@@ -1403,18 +1426,18 @@ private:
 
     void paint_fill(const texmath::Path& path, const Style& st) {
         if (!st.fill.url.empty()) {
-            if (auto sh = gradient_shader(st.fill.url, st.ctm, st.fill_opacity)) cv_->fill(path, {}, 1.0f, &*sh);
+            if (auto sh = gradient_shader(st.fill.url, st.ctm, st.fill_opacity)) target(st.fill).fill(path, {}, 1.0f, &*sh);
             return;
         }
-        cv_->fill(path, st.fill.rgb, st.fill_opacity * st.fill.alpha);
+        target(st.fill).fill(path, st.fill.rgb, st.fill_opacity * st.fill.alpha);
     }
 
     void paint_stroke(const std::vector<Poly>& polys, const Style& st) {
         if (!st.stroke.url.empty()) {
-            if (auto sh = gradient_shader(st.stroke.url, st.ctm, st.stroke_opacity)) cv_->fill_polys(polys, {}, 1.0f, &*sh);
+            if (auto sh = gradient_shader(st.stroke.url, st.ctm, st.stroke_opacity)) target(st.stroke).fill_polys(polys, {}, 1.0f, &*sh);
             return;
         }
-        cv_->fill_polys(polys, st.stroke.rgb, st.stroke_opacity * st.stroke.alpha);
+        target(st.stroke).fill_polys(polys, st.stroke.rgb, st.stroke_opacity * st.stroke.alpha);
     }
 
     // ---- <image> (PNG data URIs, as the C4 person icons) ----
@@ -1563,9 +1586,19 @@ private:
         std::vector<Run> runs;
     };
 
+    // A formula for the TeX engine (a <tspan data-tex="...">, see text.h): drawn as a bitmap instead of glyphs.
+    struct MathItem {
+        std::string tex;
+        float x = 0, y = 0;  // the tspan's text position (user units)
+        Style style;
+        MathBitmap bitmap;
+        MathBox box;
+    };
+
     struct TextState {
         float x = 0, y = 0;  // current text position
         std::vector<Chunk> chunks;
+        std::vector<MathItem> maths;
         bool at_chunk_start = true;
     };
 
@@ -1604,6 +1637,22 @@ private:
             }
             if (auto dy = first("dy")) ts.y += *dy;
             if (auto dx = first("dx")) { (void)dx; throw Unsupported("tspan dx"); }
+            if (const std::string* tex = n.attr("data-tex"); tex && math_hooks_active()) {
+                // The formula's bitmap at the device size; if the engine cannot draw it the plain text below is drawn.
+                const float device_scale = std::sqrt(std::fabs(st.ctm.a * st.ctm.d - st.ctm.b * st.ctm.c));
+                MathItem item;
+                item.tex = *tex;
+                item.x = ts.x;
+                item.y = ts.y;
+                item.style = st;
+                auto box = math_hooks().measure(*tex, st.font_size);
+                if (box && math_hooks().render(*tex, st.font_size * device_scale, item.bitmap)) {
+                    item.box = *box;
+                    ts.maths.push_back(std::move(item));
+                    ts.at_chunk_start = true;
+                    return;
+                }
+            }
         }
         for (const XNode& c : n.children) {
             if (c.tag.empty()) {
@@ -1685,6 +1734,35 @@ private:
         return 0.0f;  // auto, baseline, alphabetic
     }
 
+    // A formula: its box is centred on the line the way the plain text would sit (about 0.3 em above the baseline), placed
+    // by text-anchor like the text; the bitmap's alpha is blended in the text colour.
+    void draw_math(const MathItem& it) {
+        const Style& st = it.style;
+        float left = it.x;
+        if (st.anchor == "middle") left -= it.box.width / 2.0f;
+        else if (st.anchor == "end") left -= it.box.width;
+        const float baseline = it.y - 0.3f * st.font_size + (it.box.ascent - it.box.descent) / 2.0f;
+        const P at = apply(st.ctm, {left, baseline});
+        const int ox = static_cast<int>(std::lround(at.x - it.bitmap.origin_x));
+        const int oy = static_cast<int>(std::lround(at.y - it.bitmap.origin_y));
+        Canvas& cv = target(st.fill);
+        const float alpha = st.fill_opacity * st.fill.alpha;
+        const Rgb rgb = st.fill.url.empty() ? st.fill.rgb : Rgb{0, 0, 0};
+        for (uint32_t y = 0; y < it.bitmap.height; ++y) {
+            const int dy = oy + static_cast<int>(y);
+            if (dy < 0 || dy >= static_cast<int>(cv.h)) continue;
+            for (uint32_t x = 0; x < it.bitmap.width; ++x) {
+                const int dx = ox + static_cast<int>(x);
+                if (dx < 0 || dx >= static_cast<int>(cv.w)) continue;
+                const float a = static_cast<float>(it.bitmap.rgba[(size_t(y) * it.bitmap.width + x) * 4 + 3]) / 255.0f * alpha;
+                if (a <= 0.0f) continue;
+                uint8_t* d = &cv.px[(size_t(dy) * cv.w + static_cast<size_t>(dx)) * 4];
+                const float src[4] = {rgb.r * a, rgb.g * a, rgb.b * a, a * 255.0f};
+                for (int k = 0; k < 4; ++k) d[k] = static_cast<uint8_t>(std::clamp(std::lround(src[k] + d[k] * (1.0f - a)), 0L, 255L));
+            }
+        }
+    }
+
     void draw_text(const XNode& n, const Style& st) {
         if (!st.stroke.none) throw Unsupported("stroked text");
         TextState ts;
@@ -1695,6 +1773,7 @@ private:
         // textLength (lengthAdjust="spacing"): the glyph advances are widened so the text is that long
         std::optional<float> text_length = first_length(n.attr("textLength"), st.font_size);
         if (const std::string* la = n.attr("lengthAdjust"); la && *la != "spacing") throw Unsupported("lengthAdjust " + *la);
+        for (const MathItem& item : ts.maths) draw_math(item);
         for (Chunk& chunk : ts.chunks) {
             // trim the chunk's outer spaces (xml:space="default")
             if (!chunk.runs.empty()) {
@@ -1761,7 +1840,7 @@ void ink(const std::vector<uint8_t>& rgba, std::vector<uint8_t>& out) {
 
 }  // namespace
 
-InkImage rasterize_svg(const std::string& svg, float scale, const FontSet& fonts) {
+InkImage rasterize_svg(const std::string& svg, float scale, const FontSet& fonts, bool keep_colour) {
     XmlReader reader(svg);
     XNode doc = reader.parse_document();
     const XNode* root = nullptr;
@@ -1806,7 +1885,9 @@ InkImage rasterize_svg(const std::string& svg, float scale, const FontSet& fonts
 
     Style base;
     base.ctm = mul(Mat{scale, 0, 0, scale, 0, 0}, view);
-    Renderer renderer(canvas, fonts);
+    std::optional<Canvas> colour;
+    if (keep_colour) colour.emplace(canvas.w, canvas.h);
+    Renderer renderer(canvas, fonts, colour ? &*colour : nullptr);
     renderer.index_ids(*root);
     for (const XNode& c : root->children) renderer.draw(c, base);
 
@@ -1814,6 +1895,16 @@ InkImage rasterize_svg(const std::string& svg, float scale, const FontSet& fonts
     out.width = canvas.w;
     out.height = canvas.h;
     ink(canvas.px, out.rgba);
+    if (colour) {
+        // premultiplied -> straight alpha, the form the texture is uploaded in
+        out.colour.resize(colour->px.size());
+        for (size_t i = 0; i + 3 < colour->px.size(); i += 4) {
+            const uint32_t a = colour->px[i + 3];
+            for (size_t k = 0; k < 3; ++k)
+                out.colour[i + k] = a == 0 ? 0 : static_cast<uint8_t>(std::min<uint32_t>(255, (uint32_t(colour->px[i + k]) * 255 + a / 2) / a));
+            out.colour[i + 3] = static_cast<uint8_t>(a);
+        }
+    }
     return out;
 }
 

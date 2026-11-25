@@ -52,27 +52,10 @@ float clamp_f(float v, float lo, float hi) {
     return v;
 }
 
-// compute_link_tops: where each outgoing link starts on its source node (stacked in `outbound_order`).
-void compute_link_tops(const std::vector<float>& node_positions, const std::vector<std::vector<size_t>>& outbound_order,
-                       const std::vector<float>& edge_thickness, std::vector<float>& link_top, std::vector<float>& outbound_offset,
-                       std::vector<float>& acc) {
-    std::fill(link_top.begin(), link_top.end(), 0.0f);
-    std::fill(outbound_offset.begin(), outbound_offset.end(), 0.0f);
-    std::fill(acc.begin(), acc.end(), 0.0f);
-    for (size_t source_idx = 0; source_idx < outbound_order.size(); ++source_idx) {
-        for (size_t edge_idx : outbound_order[source_idx]) {
-            float offset = acc[source_idx];
-            outbound_offset[edge_idx] = offset;
-            link_top[edge_idx] = node_positions[source_idx] + offset;
-            acc[source_idx] += edge_thickness[edge_idx];
-        }
-    }
-}
-
 }  // namespace
 
 Layout compute_sankey_layout(const Graph& graph, const Theme& theme, const LayoutConfig& config) {
-    constexpr float kMinWidth = 560.0f, kMaxWidth = 640.0f, kHeight = 360.0f, kNodeWidth = 10.0f;
+    constexpr float kMinWidth = 560.0f, kMaxWidth = 640.0f, kHeight = 360.0f, kNodeWidth = 10.0f, kNodePadding = 24.0f;
     static const char* const kPalette[10] = {"#4e79a7", "#f28e2c", "#e15759", "#76b7b2", "#59a14f",
                                               "#edc949", "#af7aa1", "#ff9da7", "#9c755f", "#bab0ab"};
 
@@ -150,8 +133,14 @@ Layout compute_sankey_layout(const Graph& graph, const Theme& theme, const Layou
             }
     }
 
+    // Calligrus deviation (PORTING.md): the crate never separates the nodes of a column and stacks links by the source's top.
+    // This follows d3-sankey (mermaid.js): "justify" alignment (sinks in the last column), node height = max(in, out) * ky with one
+    // scale for all columns, a fixed padding between the nodes of a column, a few relaxation passes toward the neighbours, and
+    // link bands stacked top to bottom at both ends in the order of the node at the other end.
     size_t max_rank = 0;
     for (size_t r : ranks) max_rank = std::max(max_rank, r);
+    for (size_t idx = 0; idx < node_count; ++idx)
+        if (outgoing[idx].empty() && !incoming[idx].empty()) ranks[idx] = max_rank;
     size_t num_ranks = max_rank + 1;
     float sankey_width = clamp_f(kMinWidth + static_cast<float>(num_ranks > 2 ? num_ranks - 2 : 0) * 25.0f, kMinWidth, kMaxWidth);
     float gap_x = num_ranks > 1 ? rmax((sankey_width - kNodeWidth * static_cast<float>(num_ranks)) / static_cast<float>(num_ranks - 1), 0.0f) : 0.0f;
@@ -161,54 +150,98 @@ Layout compute_sankey_layout(const Graph& graph, const Theme& theme, const Layou
         float total = rmax(in_total[idx], out_total[idx]);
         totals[idx] = total > 0.0f ? total : 1.0f;
     }
-    float max_total = 0.0f;
-    for (float t : totals) max_total = rmax(max_total, t);
-    max_total = rmax(max_total, 1.0f);
-    float scale = kHeight / max_total;
+
+    std::vector<std::vector<size_t>> rank_nodes(num_ranks);
+    for (size_t idx = 0; idx < node_count; ++idx) rank_nodes[ranks[idx]].push_back(idx);
+    size_t max_column = 1;
+    for (auto& nodes_in_rank : rank_nodes) {
+        max_column = std::max(max_column, nodes_in_rank.size());
+        std::stable_sort(nodes_in_rank.begin(), nodes_in_rank.end(), [&](size_t a, size_t b) {
+            if (node_order_idx[a] != node_order_idx[b]) return node_order_idx[a] < node_order_idx[b];
+            return node_ids[a] < node_ids[b];
+        });
+    }
+    // many nodes in a column need more room than the default height
+    const float height = rmax(kHeight, static_cast<float>(max_column - 1) * kNodePadding + kHeight * 0.3f);
+    float scale = std::numeric_limits<float>::infinity();
+    for (const auto& nodes_in_rank : rank_nodes) {
+        float sum = 0.0f;
+        for (size_t idx : nodes_in_rank) sum += totals[idx];
+        if (sum > 0.0f) scale = rmin(scale, (height - kNodePadding * static_cast<float>(nodes_in_rank.size() - 1)) / sum);
+    }
+    if (!std::isfinite(scale) || scale <= 0.0f) scale = 1.0f;
 
     std::vector<float> node_x(node_count, 0.0f), node_y(node_count, 0.0f), node_h(node_count, 0.0f);
     for (size_t idx = 0; idx < node_count; ++idx) {
         node_x[idx] = static_cast<float>(ranks[idx]) * (kNodeWidth + gap_x);
         node_h[idx] = totals[idx] * scale;
     }
-
-    std::vector<std::vector<size_t>> rank_nodes(num_ranks);
-    for (size_t idx = 0; idx < node_count; ++idx) rank_nodes[ranks[idx]].push_back(idx);
-    for (auto& nodes_in_rank : rank_nodes)
-        std::stable_sort(nodes_in_rank.begin(), nodes_in_rank.end(), [&](size_t a, size_t b) {
-            if (node_order_idx[a] != node_order_idx[b]) return node_order_idx[a] < node_order_idx[b];
-            return node_ids[a] < node_ids[b];
-        });
-
-    // outgoing links of a node: the ones going furthest right first, then by target order
-    std::vector<std::vector<size_t>> outbound_order = outgoing;
-    for (auto& edges : outbound_order)
-        std::stable_sort(edges.begin(), edges.end(), [&](size_t a, size_t b) {
-            size_t target_a = edges_data[a].to_idx, target_b = edges_data[b].to_idx;
-            if (ranks[target_b] != ranks[target_a]) return ranks[target_b] < ranks[target_a];
-            if (node_order_idx[target_a] != node_order_idx[target_b]) return node_order_idx[target_a] < node_order_idx[target_b];
-            return node_ids[target_a] < node_ids[target_b];
-        });
-
-    std::vector<float> edge_thickness;
-    for (const auto& e : edges_data) edge_thickness.push_back(e.value * scale);
-    std::vector<float> link_top(edges_data.size(), 0.0f), outbound_offset(edges_data.size(), 0.0f), acc(node_count, 0.0f);
-
-    for (size_t rank = 1; rank <= max_rank; ++rank) {
-        compute_link_tops(node_y, outbound_order, edge_thickness, link_top, outbound_offset, acc);
-        for (size_t node_idx : rank_nodes[rank]) {
-            float min_top = std::numeric_limits<float>::infinity();
-            for (size_t edge_idx : incoming[node_idx]) {
-                size_t from_idx = edges_data[edge_idx].from_idx;
-                if (ranks[from_idx] >= rank) continue;
-                min_top = rmin(min_top, link_top[edge_idx]);
-            }
-            if (!std::isfinite(min_top)) continue;
-            float max_y = rmax(kHeight - node_h[node_idx], 0.0f);
-            node_y[node_idx] = clamp_f(min_top, 0.0f, max_y);
+    for (const auto& nodes_in_rank : rank_nodes) {
+        float y = 0.0f;
+        for (size_t idx : nodes_in_rank) {
+            node_y[idx] = y;
+            y += node_h[idx] + kNodePadding;
         }
     }
-    compute_link_tops(node_y, outbound_order, edge_thickness, link_top, outbound_offset, acc);
+    auto centre = [&](size_t idx) { return node_y[idx] + node_h[idx] / 2.0f; };
+
+    // d3's resolveCollisions: sort by y, push down to the padding, then push up from the bottom edge.
+    auto resolve_collisions = [&](std::vector<size_t>& column) {
+        std::stable_sort(column.begin(), column.end(), [&](size_t a, size_t b) { return node_y[a] < node_y[b]; });
+        float y = 0.0f;
+        for (size_t idx : column) {
+            node_y[idx] = rmax(node_y[idx], y);
+            y = node_y[idx] + node_h[idx] + kNodePadding;
+        }
+        if (!column.empty() && node_y[column.back()] + node_h[column.back()] > height) {
+            node_y[column.back()] = height - node_h[column.back()];
+            for (size_t i = column.size() - 1; i-- > 0;) {
+                float limit = node_y[column[i + 1]] - kNodePadding - node_h[column[i]];
+                node_y[column[i]] = rmin(node_y[column[i]], limit);
+            }
+        }
+    };
+    // move each node toward the value-weighted centre of the nodes its links lead to (`forward`: the targets, else the sources)
+    auto relax = [&](std::vector<size_t>& column, bool forward, float alpha) {
+        for (size_t idx : column) {
+            float weighted = 0.0f, weight = 0.0f;
+            for (size_t edge_idx : (forward ? outgoing[idx] : incoming[idx])) {
+                const EdgeData& e = edges_data[edge_idx];
+                size_t other = forward ? e.to_idx : e.from_idx;
+                if (other == idx || e.value <= 0.0f) continue;
+                weighted += centre(other) * e.value;
+                weight += e.value;
+            }
+            if (weight > 0.0f) node_y[idx] += (weighted / weight - centre(idx)) * alpha;
+        }
+        resolve_collisions(column);
+    };
+    for (auto& column : rank_nodes) resolve_collisions(column);
+    for (int pass = 0; pass < 6; ++pass) {
+        const float alpha = std::pow(0.9f, static_cast<float>(pass));
+        for (size_t rank = num_ranks; rank-- > 0;) relax(rank_nodes[rank], true, alpha);
+        for (size_t rank = 0; rank < num_ranks; ++rank) relax(rank_nodes[rank], false, alpha);
+    }
+
+    // link bands: stacked from the node's top, in the order of the node at the other end (ties: input order)
+    std::vector<float> edge_thickness;
+    for (const auto& e : edges_data) edge_thickness.push_back(e.value * scale);
+    std::vector<float> src_top(edges_data.size(), 0.0f), dst_top(edges_data.size(), 0.0f);
+    for (size_t idx = 0; idx < node_count; ++idx) {
+        std::vector<size_t> out_edges = outgoing[idx], in_edges = incoming[idx];
+        std::stable_sort(out_edges.begin(), out_edges.end(), [&](size_t a, size_t b) { return node_y[edges_data[a].to_idx] < node_y[edges_data[b].to_idx]; });
+        std::stable_sort(in_edges.begin(), in_edges.end(), [&](size_t a, size_t b) { return node_y[edges_data[a].from_idx] < node_y[edges_data[b].from_idx]; });
+        float y = node_y[idx];
+        for (size_t edge_idx : out_edges) {
+            src_top[edge_idx] = y;
+            y += edge_thickness[edge_idx];
+        }
+        y = node_y[idx];
+        for (size_t edge_idx : in_edges) {
+            dst_top[edge_idx] = y;
+            y += edge_thickness[edge_idx];
+        }
+    }
 
     std::vector<std::pair<std::string, NodeStyle>> node_colors;
     for (size_t idx = 0; idx < node_count; ++idx) {
@@ -250,9 +283,8 @@ Layout compute_sankey_layout(const Graph& graph, const Theme& theme, const Layou
         if (thickness <= 0.0f) continue;
         float start_x = node_x[edge.from_idx] + kNodeWidth;
         float end_x = node_x[edge.to_idx];
-        float start_y = node_y[edge.from_idx] + outbound_offset[edge_idx] + thickness / 2.0f;
-        float inbound_offset = rmax(link_top[edge_idx] - node_y[edge.to_idx], 0.0f);
-        float end_y = node_y[edge.to_idx] + inbound_offset + thickness / 2.0f;
+        float start_y = src_top[edge_idx] + thickness / 2.0f;
+        float end_y = dst_top[edge_idx] + thickness / 2.0f;
         const std::string& color_start = node_colors[edge.from_idx].first;
         const std::string& color_end = node_colors[edge.to_idx].first;
 
@@ -268,9 +300,9 @@ Layout compute_sankey_layout(const Graph& graph, const Theme& theme, const Layou
     }
 
     layout.width = sankey_width;
-    layout.height = kHeight;
+    layout.height = height;
     sankey.width = sankey_width;
-    sankey.height = kHeight;
+    sankey.height = height;
     sankey.node_width = kNodeWidth;
     layout.sankey = std::move(sankey);
     // compute_layout's label pass finds no edge labels here, so nothing else changes.
@@ -335,10 +367,6 @@ std::string render_sankey_svg(const Layout& layout, const Theme& theme, const La
         // Node labels always render one additional value line below the title.
         label_half_heights.push_back((count + 1.0f) * label_line_height * 0.5f);
     }
-    std::vector<float> rank_min_x(max_rank + 1, std::numeric_limits<float>::infinity());
-    for (const auto& node : sk.nodes) rank_min_x[node.rank] = rmin(rank_min_x[node.rank], node.x);
-    for (float& x : rank_min_x)
-        if (!std::isfinite(x)) x = 0.0f;
     float edge_margin = label_font_size * 0.3f;
     float preferred_gap = label_font_size * 0.25f;
     for (size_t rank = 0; rank <= max_rank; ++rank) {
@@ -356,34 +384,32 @@ std::string render_sankey_svg(const Layout& layout, const Theme& theme, const La
         float available_span = rmax(bottom - top, 0.0f);
         float max_gap = (available_span - half_pair_span) / static_cast<float>(indices.size() - 1);
         float gap = rmin(preferred_gap, rmax(max_gap, 0.0f));
-        float required_span = half_pair_span + gap * static_cast<float>(indices.size() - 1);
-        float first_max = rmax(bottom - required_span, top);
 
-        label_y[first_idx] = clamp_f(label_y[first_idx], top, first_max);
+        // Calligrus deviation: labels stay centred on their node and move only as far as needed to stop overlapping
+        // (the crate stacks them one after the other from the first one).
+        label_y[first_idx] = rmax(label_y[first_idx], top);
         for (size_t i = 0; i + 1 < indices.size(); ++i) {
             size_t prev_idx = indices[i], cur_idx = indices[i + 1];
             float min_gap = label_half_heights[prev_idx] + label_half_heights[cur_idx] + gap;
-            label_y[cur_idx] = label_y[prev_idx] + min_gap;
+            label_y[cur_idx] = rmax(label_y[cur_idx], label_y[prev_idx] + min_gap);
+        }
+        float overflow = label_y[last_idx] - bottom;
+        if (overflow > 0.0f) {
+            label_y[last_idx] = bottom;
+            for (size_t i = indices.size() - 1; i-- > 0;) {
+                float min_gap = label_half_heights[indices[i]] + label_half_heights[indices[i + 1]] + gap;
+                label_y[indices[i]] = rmin(label_y[indices[i]], label_y[indices[i + 1]] - min_gap);
+            }
         }
     }
 
     out += "<g class=\"node-labels\" font-size=\"" + F(label_font_size) + "\" fill=\"" + theme.primary_text_color + "\">";
     for (size_t idx = 0; idx < sk.nodes.size(); ++idx) {
         const auto& node = sk.nodes[idx];
-        bool align_left_of_node = node.rank > 0;
+        // beside the node, on the side facing the middle of the diagram: left of the last column, right of the others
+        bool align_left_of_node = max_rank > 0 && node.rank == max_rank;
         const char* text_anchor = align_left_of_node ? "end" : "start";
-        float x;
-        if (align_left_of_node) {
-            float inward_offset = 6.0f;
-            if (node.rank < max_rank) {
-                float prev_x = rank_min_x[node.rank > 0 ? node.rank - 1 : 0];
-                float rank_gap = rmax(node.x - prev_x, 0.0f);
-                inward_offset = clamp_f(rank_gap * 0.2f, 6.0f, label_font_size * 3.0f);
-            }
-            x = node.x - inward_offset;
-        } else {
-            x = node.x + sk.node_width + 6.0f;
-        }
+        float x = align_left_of_node ? node.x - 6.0f : node.x + sk.node_width + 6.0f;
         float y = label_y[idx];
         std::string label = escape_xml(node.label);
         std::string value = format_sankey_value(node.total);

@@ -212,6 +212,7 @@ void font_family_field(const char* label, const char* key, std::string& value, c
         ImGui::EndCombo();
     }
 
+#ifndef __ANDROID__
     ImGui::SameLine();
     if (ImGui::Button("Browse\xE2\x80\xA6")) {  // "Browse…"
         if (auto p = platform::open_font_dialog(hwnd)) {
@@ -219,6 +220,7 @@ void font_family_field(const char* label, const char* key, std::string& value, c
             writes.emplace_back(key, toml_string(value));
         }
     }
+#endif
     ImGui::SameLine();
     if (ImGui::Button("Reset") && !value.empty()) {
         value.clear();
@@ -317,8 +319,11 @@ ConfigWrites draw_settings(bool& open, Config& cfg, const ThemeSet& themes, cons
         checkbox("Vim keys", "vim_keys", cfg.vim_keys, writes);
         checkbox("Use system fonts for missing characters", "system_fallback", cfg.system_fallback, writes);
         checkbox("Show outline at start-up", "show_outline", cfg.show_outline, writes);
+#ifndef __ANDROID__
         checkbox("Remember window size and position", "remember_window", cfg.remember_window, writes);
+#endif
         checkbox("Code line numbers", "code.line_numbers", cfg.code_line_numbers, writes);
+#ifndef __ANDROID__
         checkbox("Show the cursor marker in editor previews", "editor_marker", cfg.editor_marker, writes);
         ImGui::Separator();
 
@@ -336,6 +341,7 @@ ConfigWrites draw_settings(bool& open, Config& cfg, const ThemeSet& themes, cons
             fs::create_directories(dir, ec);
             platform::open_path(dir);
         }
+#endif
     }
     ImGui::End();
     ImGui::PopStyleVar(2);

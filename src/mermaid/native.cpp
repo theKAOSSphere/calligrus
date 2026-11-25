@@ -46,12 +46,13 @@ std::optional<InkImage> native_render(const std::string& source, float scale) {
         return std::nullopt;
     }
     try {
-        std::string svg = render_mermaid_svg(source);
+        bool keep_colour = false;
+        std::string svg = render_mermaid_svg(source, &keep_colour);
         FontSet fonts;
         fonts.regular = &s.regular;
         fonts.bold = s.has_bold ? &s.bold : nullptr;
         fonts.italic = s.has_italic ? &s.italic : nullptr;
-        return rasterize_svg(svg, scale, fonts);
+        return rasterize_svg(svg, scale, fonts, keep_colour);
     } catch (const Unsupported& e) {
         s.reason = std::string("unsupported: ") + e.what();
     } catch (const ParseError& e) {

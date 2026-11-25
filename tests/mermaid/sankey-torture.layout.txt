@@ -1,0 +1,18 @@
+size 610 360
+node CSV 200 306 10 54 hidden=false lines=["CSV"] label=28.976002x24
+node GPU 600 0 10 306 hidden=false lines=["GPU"] label=31.664001x24
+node Input 0 0 10 360 hidden=false lines=["Input"] label=45.54154x24
+node Layout 400 0 10 306 hidden=false lines=["Layout"] label=54.64985x24
+node Markdown 200 0 10 216 hidden=false lines=["Markdown"] label=75.456x24
+node Org 200 216 10 90 hidden=false lines=["Org"] label=27.324924x24
+node PDF 600 252 10 54 hidden=false lines=["PDF"] label=29.376x24
+node Plain text 400 306 10 54 hidden=false lines=["Plain text"] label=91.08308x24
+edge Input->Markdown (10,108) (200,108) anchor=None
+edge Input->Org (10,261) (200,261) anchor=None
+edge Input->CSV (10,333) (200,333) anchor=None
+edge Markdown->Layout (210,108) (400,108) anchor=None
+edge Org->Layout (210,261) (400,261) anchor=None
+edge CSV->Plain text (210,333) (400,333) anchor=None
+edge Layout->GPU (410,126) (600,126) anchor=None
+edge Layout->PDF (410,279) (600,279) anchor=None
+edge Plain text->GPU (410,333) (600,333) anchor=None

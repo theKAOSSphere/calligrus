@@ -1,7 +1,7 @@
 name: CI
 
-# Tags (v*) are the release workflow's business. Every run also packages the Windows zip, the Linux tar.gz and the
-# Android APK the way a release ships them (artifacts calligrus-windows-x64, calligrus-linux-x64, calligrus-android,
+# Tags (v*) are the release workflow's business. Every run also packages the Windows zip, the Linux tar.gz (x86-64 and ARM64) and the
+# Android APK the way a release ships them (artifacts calligrus-windows-x64, calligrus-linux-x64, calligrus-linux-arm64, calligrus-android,
 # kept 90 days): release.yml reuses them for the tagged commit instead of building again.
 on:
   push:
@@ -121,11 +121,33 @@ jobs:
             spec/tests/visual/out
           if-no-files-found: ignore
 
+  # Linux x86-64 and ARM64 (GitHub's free arm64 runner). Ubuntu 22.04 on purpose: its glibc (2.35) is the oldest the
+  # packages have to run on (Debian 12 has 2.36), and a build on a newer system needs a newer glibc. The C++ runtime is
+  # linked in statically (CMakeLists.txt) and the GL / X11 / Wayland libraries are opened at run time (src/gl_funcs.h,
+  # GLFW), so the only libraries the program needs are libc and libm: scripts/check-portable.sh checks that after the
+  # build. GCC 12 for C++20 (the image's default is GCC 11).
   linux:
-    runs-on: ubuntu-latest
+    name: linux (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-22.04
+            # The visual suite compares with spec/tests/visual/refs/linux (made on x86-64): a mismatch fails the job.
+            visual_gates: true
+          - arch: arm64
+            runner: ubuntu-22.04-arm
+            # Font rasterisation (FreeType, HarfBuzz) can differ in the last bit on ARM, and the x86-64 references are the
+            # only ones there are: on ARM the suite runs and its report is uploaded, but a mismatch does not fail the job
+            # (a failing job would also stop the release from reusing this run's packages). Make it true once it passes.
+            visual_gates: false
     env:
       SCCACHE_GHA_ENABLED: "true"
       CALLIGRUS_COMPILER_LAUNCHER: sccache
+      CC: gcc-12
+      CXX: g++-12
     steps:
       - uses: actions/checkout@v4
 
@@ -142,13 +164,17 @@ jobs:
       - name: Compiler cache (sccache)
         uses: mozilla-actions/sccache-action@v0.0.11
 
+      # (cmake and ninja come with the runner image, newer than Ubuntu's own packages.)
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake ninja-build pkg-config \
+          sudo apt-get install -y build-essential gcc-12 g++-12 pkg-config \
             libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl-dev \
             libxkbcommon-dev libwayland-dev wayland-protocols libxext-dev \
             xvfb libgl1-mesa-dri python3-pip
+          g++-12 --version | head -n 1
+          cmake --version | head -n 1
+          ldd --version | head -n 1
 
       - name: Build (Release)
         run: bash build.sh
@@ -159,6 +185,10 @@ jobs:
         with:
           path: .deps-cache
           key: ${{ steps.deps-cache.outputs.cache-primary-key }}
+
+      # Only libc and libm, no GLIBC_ symbol newer than 2.35, no GLIBCXX_ / CXXABI_: see scripts/check-portable.sh.
+      - name: Check that the build is portable
+        run: bash scripts/check-portable.sh build/calligrus 2.35
 
       - name: Run the console tests
         run: |
@@ -172,7 +202,7 @@ jobs:
       # The same folder layout as the release archive (the release renames the archive and its folder after the tag).
       - name: Package (as the release)
         run: |
-          name="calligrus-linux-x64"
+          name="calligrus-linux-${{ matrix.arch }}"
           mkdir -p "$name/fonts"
           cp build/calligrus LICENSE THIRD-PARTY.md "$name/"
           cp assets/fonts/*.txt "$name/fonts/"
@@ -181,8 +211,8 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: calligrus-linux-x64
-          path: calligrus-linux-x64.tar.gz
+          name: calligrus-linux-${{ matrix.arch }}
+          path: calligrus-linux-${{ matrix.arch }}.tar.gz
           retention-days: 90
           if-no-files-found: error
 
@@ -191,6 +221,8 @@ jobs:
         run: sccache --show-stats
 
       - name: Visual suite
+        id: visual
+        continue-on-error: ${{ !matrix.visual_gates }}
         run: |
           if [ -d spec/tests/visual/refs/linux ]; then
             python3 -m pip install pillow pymupdf
@@ -200,11 +232,16 @@ jobs:
             echo "No spec/tests/visual/refs/linux folder; the visual suite is skipped."
           fi
 
+      - name: Visual suite differs on this architecture (not gating)
+        if: steps.visual.outcome == 'failure'
+        run: |
+          echo "::warning::The visual suite failed on ${{ matrix.arch }} (not gating there), see the visual-report artifact."
+
       - name: Upload the visual report
-        if: failure()
+        if: failure() || steps.visual.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
-          name: visual-report-linux
+          name: visual-report-linux-${{ matrix.arch }}
           path: |
             spec/tests/visual/report
             spec/tests/visual/out

@@ -41,6 +41,12 @@ namespace {
 // Diagrams that already match byte for byte: a regression here fails the test run.
 const std::vector<std::string> kMustBeIdentical = {"f01-min", "f02-lr", "f03-rl", "f04-bt", "f05-shapes", "f09-chain", "f10-fanout", "f15-styles", "f16-long-labels", "f17-self-loop", "f18-multi-edge"};
 
+// Inputs the Rust crate rejects but Calligrus draws on purpose (a Calligrus deviation; PORTING.md, "Deviations").
+const std::vector<std::string> kRendersWhereRustRejects = {"class-a04-stereo"};
+
+// Sankey goldens whose layout Calligrus deliberately does differently (d3-sankey like mermaid.js; PORTING.md, "Deviations").
+const std::vector<std::string> kSankeyDeviates = {"sankey-torture", "sankey-t-basic", "exp-sankey-energy", "bench-sankey-medium"};
+
 std::string read_file(const fs::path& p) {
     std::ifstream f(p, std::ios::binary);
     std::ostringstream ss;
@@ -266,6 +272,180 @@ void write_pgm(const fs::path& p, uint32_t w, uint32_t h, const std::vector<uint
     f.write(reinterpret_cast<const char*>(gray.data()), static_cast<std::streamsize>(gray.size()));
 }
 
+// ---- Calligrus deviations from mermaid-rs-renderer (each one is listed in PORTING.md, "Deviations") ----
+// These cannot come from the oracle (the reference lacks the feature), so they are checked here by other means.
+
+int check_failures = 0;
+void check(bool ok, const std::string& what) {
+    std::cout << "  DEVIATION " << (ok ? "ok    " : "FAILED ") << what << "\n";
+    if (!ok) ++check_failures;
+}
+
+size_t ink_sum(const InkImage& img) {
+    size_t sum = 0;
+    for (size_t i = 0; i < img.rgba.size(); i += 4) sum += img.rgba[i];
+    return sum;
+}
+
+void run_deviation_tests() {
+    std::cout << "deviations\n";
+
+    // 1. `<<interface>>` inside a class body. The reference rejects the line as "an arrow without a source"; Mermaid itself takes
+    // it, and so do we: the result must equal the reference's own output for the same class with `R : <<interface>>`.
+    {
+        const std::string body_form = R"(classDiagram
+    class DocState {
+        +path: fs::path
+        +doc: md::Document
+        +cache: LayoutCache
+        +load(path) bool
+        -too_large_note() string
+    }
+    class Tab {
+        +st: DocState
+        +slides: Slides
+    }
+    class Renderer {
+        <<interface>>
+        +draw(Block&) void
+    }
+    Tab "1" *-- "1" DocState
+    DocState o-- "many" Block
+    Block <|-- Paragraph
+    Block <|-- CodeBlock
+    Block <|-- MathBlock
+    Renderer <|.. GpuRenderer
+    Renderer <|.. PdfRenderer
+)";
+        const std::string want = read_file(fs::path(CALLIGRUS_MERMAID_CORPUS) / "class-stereotype-member.svg");
+        std::string got;
+        try { got = render_mermaid_svg(body_form); } catch (const std::exception& e) { got = std::string("error: ") + e.what(); }
+        check(!want.empty() && got == want, "class: <<interface>> in a body = the reference's `R : <<interface>>` (byte-identical SVG)");
+        // a real leading arrow is still rejected
+        bool rejected = false;
+        try { render_mermaid_svg("flowchart LR\n  --> B\n"); } catch (const ParseError&) { rejected = true; }
+        check(rejected, "a line starting with a real arrow is still rejected");
+    }
+
+    // 2. sankey keeps its colours: a colour layer next to the ink mask; other kinds do not.
+    {
+        const std::string sankey = read_file(fs::path(CALLIGRUS_MERMAID_CORPUS) / "sankey-torture.mmd");
+        bool keep = false;
+        render_mermaid_svg(sankey, &keep);
+        check(keep, "sankey asks for its colours");
+        bool keep_flow = true;
+        render_mermaid_svg("flowchart LR\n  A --> B\n", &keep_flow);
+        check(!keep_flow, "a flowchart does not");
+        auto img = native_render(sankey, 1.05f);
+        bool has_blue = false, has_orange = false;
+        size_t coloured = 0;
+        if (img && img->colour.size() == img->rgba.size()) {
+            for (size_t i = 0; i < img->colour.size(); i += 4) {
+                const uint8_t r = img->colour[i], g = img->colour[i + 1], b = img->colour[i + 2], a = img->colour[i + 3];
+                if (a == 255) {
+                    ++coloured;
+                    if (r == 0x4e && g == 0x79 && b == 0xa7) has_blue = true;    // node "Input"
+                    if (r == 0xf2 && g == 0x8e && b == 0x2c) has_orange = true;  // node "Org"
+                }
+            }
+        }
+        check(img && has_blue && has_orange && coloured > 1000, "sankey colour layer holds the palette fills (#4e79a7, #f28e2c)");
+        check(img && ink_sum(*img) > 0, "sankey ink layer still holds the black labels");
+        auto flow = native_render("flowchart LR\n  A --> B\n", 1.05f);
+        check(flow && flow->colour.empty(), "flowchart has no colour layer (reference behaviour)");
+    }
+
+    // 2b. sankey layout like d3-sankey (mermaid.js): the crate stacks the nodes of a column edge to edge and puts the bands at the
+    // source's top. Checked on the whole sankey corpus: gaps >= the padding, bands inside their nodes, heights = flow sums.
+    {
+        const char* const names[] = {"sankey-torture", "sankey-t-basic", "exp-sankey-energy", "bench-sankey-medium"};
+        for (const char* name : names) {
+            const std::string src = read_file(fs::path(CALLIGRUS_MERMAID_CORPUS) / (std::string(name) + ".mmd"));
+            Theme theme;
+            LayoutConfig config;
+            Layout l = compute_layout(parse_mermaid(src), theme, config);
+            bool gaps_ok = true, ends_ok = true, heights_ok = true;
+            if (!l.sankey) { check(false, std::string(name) + ": sankey data present"); continue; }
+            const SankeyData& sk = *l.sankey;
+            std::map<std::string, const SankeyNodeLayout*> by_id;
+            std::map<std::string, std::vector<const SankeyNodeLayout*>> columns;
+            for (const auto& n : sk.nodes) {
+                by_id[n.id] = &n;
+                columns[std::to_string(n.rank)].push_back(&n);
+            }
+            for (auto& [rank, col] : columns) {
+                std::sort(col.begin(), col.end(), [](auto a, auto b) { return a->y < b->y; });
+                if (!col.empty() && col.front()->y < -0.01f) gaps_ok = false;
+                for (size_t i = 0; i + 1 < col.size(); ++i)
+                    if (col[i + 1]->y - (col[i]->y + col[i]->height) < 23.99f) gaps_ok = false;
+                if (!col.empty() && col.back()->y + col.back()->height > sk.height + 0.01f) gaps_ok = false;
+            }
+            std::map<std::string, float> in_sum, out_sum;
+            for (const auto& k : sk.links) {
+                const SankeyNodeLayout &s = *by_id[k.source], &t = *by_id[k.target];
+                if (k.start.second - k.thickness / 2 < s.y - 0.01f || k.start.second + k.thickness / 2 > s.y + s.height + 0.01f) ends_ok = false;
+                if (k.end.second - k.thickness / 2 < t.y - 0.01f || k.end.second + k.thickness / 2 > t.y + t.height + 0.01f) ends_ok = false;
+                out_sum[k.source] += k.thickness;
+                in_sum[k.target] += k.thickness;
+            }
+            for (const auto& n : sk.nodes)
+                if (std::fabs(n.height - std::max(in_sum[n.id], out_sum[n.id])) > 0.01f) heights_ok = false;
+            check(gaps_ok, std::string(name) + ": nodes of a column are at least the padding (24) apart and inside the diagram");
+            check(ends_ok, std::string(name) + ": every link starts inside its source node and ends inside its target node");
+            check(heights_ok, std::string(name) + ": node height = max(incoming, outgoing) flow");
+        }
+    }
+
+    // 3. maths in labels, through a stand-in TeX engine (the console test has no math font): marker -> sized box -> data-tex
+    // -> bitmap; and without an engine (or when it refuses) the reference's plain-text approximation, byte for byte.
+    {
+        const std::string src = "flowchart LR\n  A[\"$$x^2$$\"] --> B[\"plain\"]\n";
+        const std::string plain_svg = render_mermaid_svg(src);
+        check(plain_svg.find("data-tex") == std::string::npos, "no TeX engine: the label is the plain-text approximation");
+        const InkImage plain_img = *native_render(src, 1.05f);
+
+        MathHooks fake;
+        fake.measure = [](const std::string& tex, float fs) -> std::optional<MathBox> {
+            if (tex.find("bad") != std::string::npos) return std::nullopt;
+            return MathBox{6.0f * float(tex.size()) * fs / 16.0f, 30.0f * fs / 16.0f, 9.0f * fs / 16.0f};
+        };
+        fake.render = [](const std::string&, float ppem, MathBitmap& out) {
+            out.width = uint32_t(std::lround(ppem * 4));
+            out.height = uint32_t(std::lround(ppem * 2.5f));
+            out.rgba.assign(size_t(out.width) * out.height * 4, 255);  // a solid block of ink
+            out.origin_x = 0;
+            out.origin_y = ppem * 1.9f;
+            return true;
+        };
+        set_math_hooks(fake);
+        const std::string tex_svg = render_mermaid_svg(src);
+        check(tex_svg.find("data-tex=\"x^2\"") != std::string::npos, "TeX engine: the label line is marked data-tex (plain text kept as fallback)");
+        Layout with = compute_layout(parse_mermaid(src), Theme{}, LayoutConfig{});
+        set_math_hooks({});
+        Layout without = compute_layout(parse_mermaid(src), Theme{}, LayoutConfig{});
+        check(with.nodes.at("A").height > without.nodes.at("A").height, "TeX engine: the node is sized from the formula's box (taller than the text one)");
+        check(with.nodes.at("B").height == without.nodes.at("B").height, "text-only labels are sized as before");
+        set_math_hooks(fake);
+        const InkImage tex_img = *native_render(src, 1.05f);
+        check(ink_sum(tex_img) != ink_sum(plain_img), "TeX engine: the formula bitmap is drawn in the label");
+        // a formula the engine cannot typeset keeps the approximation
+        const std::string bad = render_mermaid_svg("flowchart LR\n  A[\"$$bad$$\"]\n");
+        check(bad.find("data-tex") == std::string::npos, "unparseable formula: falls back to plain text");
+        // a formula mixed with other text on its line is not a TeX label (plain approximation, as in the reference)
+        const std::string mixed = render_mermaid_svg("flowchart LR\n  A[\"area $$x^2$$\"]\n");
+        check(mixed.find("data-tex") == std::string::npos, "formula inside a sentence: plain text");
+        // the engine refuses to draw: the tspan's plain text is drawn
+        MathHooks refuses = fake;
+        refuses.render = [](const std::string&, float, MathBitmap&) { return false; };
+        set_math_hooks(refuses);
+        const InkImage fallback_img = *native_render(src, 1.05f);
+        check(fallback_img.width > 0 && ink_sum(fallback_img) > 0 && ink_sum(fallback_img) != ink_sum(tex_img), "engine refuses to draw: the plain text is drawn instead");
+        set_math_hooks({});
+        const std::string again = render_mermaid_svg(src);
+        check(again == plain_svg, "hooks cleared: back to the reference's output");
+    }
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -324,6 +504,11 @@ int main(int argc, char** argv) {
             if (!fs::exists(golden_path)) {
                 try {
                     render_mermaid_svg(src);
+                    if (std::find(kRendersWhereRustRejects.begin(), kRendersWhereRustRejects.end(), name) != kRendersWhereRustRejects.end()) {
+                        ++rejected_ok;
+                        std::cout << "  renders although the Rust crate rejects it (known deviation, see PORTING.md)\n";
+                        continue;
+                    }
                     ++different;
                     std::cout << "  both-reject DIFFERENT: the Rust crate rejects this input but the port renders it\n";
                 } catch (const ParseError& e) {
@@ -335,6 +520,12 @@ int main(int argc, char** argv) {
                 }
                 continue;
             }
+        }
+
+        // Calligrus lays sankeys out like mermaid.js, not like the crate: nothing to compare with (checked in run_deviation_tests).
+        if (std::find(kSankeyDeviates.begin(), kSankeyDeviates.end(), name) != kSankeyDeviates.end()) {
+            std::cout << "  lays out like mermaid.js, not like the crate (known deviation, see PORTING.md)\n";
+            continue;
         }
 
         // Stage: nodes
@@ -451,6 +642,9 @@ int main(int argc, char** argv) {
                 std::cout << "REGRESSION: " << must << " is no longer byte-identical\n";
                 ++regressions;
             }
+
+    if (filter.empty() || filter == "deviations") run_deviation_tests();
+    regressions += check_failures;
 
     std::cout << "\n" << files.size() << " diagrams (" << rejected_ok << " rejected like Rust): SVG identical " << identical << ", numeric " << numeric
               << ", different " << different << ", unsupported " << unsupported << " | nodes ok " << nodes_ok

@@ -11,6 +11,11 @@ namespace mermaid {
 
 float measure_text_width(const std::string& text, float font_size) {
     if (text.empty() || font_size <= 0.0f) return 0.0f;
+    if (std::string tex; is_math_marker_line(text, &tex)) {  // a formula for the TeX engine: its own width
+        if (math_hooks_active())
+            if (auto box = math_hooks().measure(tex, font_size)) return box->width;
+        return measure_text_width(math_marker_plain(text), font_size);
+    }
     const FontMetrics* font = measure_font();
     if (!font) throw Unsupported("no measuring font set");
     // TextMeasurer::measure turns tabs into four spaces first.
@@ -63,7 +68,7 @@ TextBlock measure_label_with_max_width(const std::string& text, float font_size,
     std::vector<std::string> lines;
     max_width = std::max(max_width, 1.0f);
     for (const std::string& line : raw_lines) {
-        if (wrap) {
+        if (wrap && !is_math_marker_line(line)) {
             auto wrapped = wrap_line(line, max_width, font_size);
             lines.insert(lines.end(), wrapped.begin(), wrapped.end());
         } else {
@@ -75,7 +80,7 @@ TextBlock measure_label_with_max_width(const std::string& text, float font_size,
     size_t max_len = 1;
     {
         size_t m = 0;
-        for (const auto& l : lines) m = std::max(m, char_count(l));
+        for (const auto& l : lines) m = std::max(m, is_math_marker_line(l) ? size_t(1) : char_count(l));
         max_len = m;  // unwrap_or(1) only applies to an empty iterator, impossible here
     }
     float widest = 0.0f;
@@ -85,6 +90,7 @@ TextBlock measure_label_with_max_width(const std::string& text, float font_size,
     TextBlock block;
     block.width = std::max(widest, guard_width);
     block.height = static_cast<float>(lines.size()) * font_size * config.label_line_height;
+    for (const auto& l : lines) block.height += math_line_extra_height(l, font_size, font_size * config.label_line_height);
     block.lines = std::move(lines);
     return block;
 }

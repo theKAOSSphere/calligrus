@@ -1,6 +1,7 @@
 // Mermaid port: flowchart parser (see parser.h). Function names match parser.rs.
 #include "parser.h"
 
+#include <cctype>
 #include <charconv>
 #include <cstring>
 #include <regex>
@@ -1007,6 +1008,10 @@ bool is_subgraph_close(const std::string& t) {
 }
 bool starts_with_arrow(const std::string& t) {
     if (t.empty()) return false;
+    // Deviation from mermaid-rs-renderer: a class annotation line such as `<<interface>>` (valid
+    // Mermaid inside a class body) is not an arrow. mermaid-rs-renderer rejects it ("line starts with
+    // an arrow"); a real arrow never has a letter right after `<<`.
+    if (starts_with(t, "<<") && t.size() > 2 && std::isalpha(static_cast<unsigned char>(t[2]))) return false;
     char c0 = t[0];
     if (!(c0 == '-' || c0 == '=' || c0 == '~' || c0 == '.' || c0 == '<')) return false;
     bool run_ok = false;

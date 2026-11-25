@@ -4,6 +4,7 @@
 //   native_render(source, scale)  Mermaid text -> white-ink bitmap, or nullopt when the port
 //                                 cannot draw this diagram (unsupported feature, syntax error):
 //                                 the caller then falls back to the Rust renderer.
+//                                 A sankey also fills InkImage::colour (see svg_raster.h).
 #pragma once
 
 #include <optional>

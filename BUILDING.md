@@ -44,6 +44,8 @@ sudo apt install build-essential cmake ninja-build pkg-config \
 ./build.sh Release --test        # also runs every build/calligrus-*-test
 ```
 
+The release packages (x86-64 and ARM64) are built by CI on Ubuntu 22.04 (glibc 2.35) with GCC 12 so that they run on older distributions such as Debian 12. The executable links the C++ runtime statically (`-static-libstdc++ -static-libgcc`) and does not link OpenGL at all: GLFW opens X11, Wayland and EGL when the window is created, and Calligrus's own GL calls (`src/gl_funcs.h`) are looked up with `glfwGetProcAddress` right after the context is made current. `scripts/check-portable.sh build/calligrus` checks the result (only `libc` and `libm` as needed libraries, no `GLIBC_` symbol above 2.35, no `GLIBCXX_`/`CXXABI_`); CI runs it after each Linux build. On a newer system the check reports the higher glibc version, which is expected: pass the version your machine has as the second argument to see the rest.
+
 `BUILD_DIR=/some/other/dir ./build.sh` builds outside the source tree; `CALLIGRUS_USE_SYSTEM_LIBS=ON ./build.sh` uses
 the distribution's libraries (experimental: not tested in CI).
 
@@ -115,6 +117,14 @@ python run.py --update           # accept the current output as the new referenc
 
 On Linux it runs under `xvfb-run` (install `xvfb`), with `DISPLAY` and `WAYLAND_DISPLAY` removed so no window opens.
 `scripts/check-linux.sh` builds, runs every test and the visual suite in one go. See `spec/tests/visual/README.md`.
+
+### Old graphics drivers
+
+Calligrus asks for OpenGL 3.3 core and falls back to 3.0, 2.1 and OpenGL ES 2.0 (spec section 36); every picture, formula, diagram and glyph page also fits the GPU's texture limit. To test that on a machine with a modern GPU, set these environment variables (read once at start-up) before `python run.py` or a normal run:
+
+- `CALLIGRUS_GL=3.3|3.0|2.1|es2` forces one context level; the program exits with a message if that level cannot be created (ES 2.0 may not exist on a Windows desktop driver). With `CALLIGRUS_TRACE=1` the level reached is printed. On Linux, `MESA_GL_VERSION_OVERRIDE=2.1 MESA_GLSL_VERSION_OVERRIDE=120` makes Mesa itself act as a 2.1-only driver.
+- `CALLIGRUS_MAX_TEXTURE=2048` pretends the GPU's texture limit is 2048 (a Raspberry Pi 3B); the smallest value is 256. Larger diagrams and pictures then come out a little softer, so a few screenshots may differ.
+- `CALLIGRUS_GL_NO_FBO=1` makes script mode draw into the hidden window instead of a framebuffer object, as it does when the driver has none; the PDF exports of the visual suite then stop (their pages are taller than a screen), the screenshots do not.
 
 ## Editor plugins
 

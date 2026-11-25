@@ -13,7 +13,7 @@
 #ifdef __ANDROID__
 #include <GLES3/gl3.h>
 #else
-#include <GL/gl.h>  // GL 1.1 texture calls are exported by opengl32 directly
+#include "gl_funcs.h"  // (GL 1.1 calls: opengl32 on Windows, function pointers on Linux)
 #endif
 
 #include <ft2build.h>
@@ -22,6 +22,7 @@
 #include <imgui_internal.h>  // ImFontBaked
 
 #include "fonts.h"
+#include "gl_caps.h"
 #include "prose_shaping.h"
 #include "shaping.h"
 
@@ -33,7 +34,8 @@ namespace {
 // first page is small (256 KB instead of 4 MB of video and driver memory), the second medium, the rest full size.
 // Up to 8 full pages (32 MB of glyph pictures) plus the two small ones.
 constexpr size_t kMaxPages = 10;
-constexpr int page_size(size_t i) { return i == 0 ? 256 : i == 1 ? 512 : 1024; }  // pixels, square
+// pixels, square; never over the GPU's texture limit (spec 36)
+int page_size(size_t i) { return std::min(i == 0 ? 256 : i == 1 ? 512 : 1024, glcaps::max_texture()); }
 
 // One texture with glyphs packed in rows ("shelves"): glyphs go left to right; a glyph that
 // does not fit starts a new row below, as tall as the first glyph of that row.
@@ -110,9 +112,17 @@ Slot reserve(int w, int h) {
             glBindTexture(GL_TEXTURE_2D, p.tex);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, 0x812F);  // CLAMP_TO_EDGE
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, 0x812F);
             const std::vector<unsigned char> blank(size_t(p.size) * p.size * 4, 0);
             glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+            while (glGetError() != GL_NO_ERROR) {}
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, p.size, p.size, 0, GL_RGBA, GL_UNSIGNED_BYTE, blank.data());
+            if (const GLenum err = glGetError(); err != GL_NO_ERROR) {  // (a page the driver refuses: no glyph pictures, the caller draws the glyphs another way)
+                glcaps::upload_failed("glyph page", unsigned(err), p.size, p.size);
+                glDeleteTextures(1, &p.tex);
+                return {kMaxPages, 0, 0};
+            }
             g_pages.push_back(p);
         }
         Page& p = g_pages[i];

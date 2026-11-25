@@ -107,9 +107,10 @@ std::string fix_svg(const std::string& svg) {
     return out;
 }
 
-std::string render_mermaid_svg(const std::string& source) {
+std::string render_mermaid_svg(const std::string& source, bool* keep_colour) {
     if (trim_view(source).empty()) throw ParseError("empty diagram");
     Graph graph = parse_mermaid(source);
+    if (keep_colour) *keep_colour = graph.kind == DiagramKind::Sankey;
     Theme theme;
     LayoutConfig config;
     Layout layout = compute_layout(graph, theme, config);

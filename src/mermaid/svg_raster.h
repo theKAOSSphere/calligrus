@@ -21,6 +21,10 @@ namespace mermaid {
 struct InkImage {
     uint32_t width = 0, height = 0;
     std::vector<uint8_t> rgba;
+    // Only for a diagram that keeps its colours (keep_colour below): a second picture, straight-alpha RGBA8 of the same size,
+    // holding what is not neutral (palette fills, gradients). The first picture then holds only the black / grey / white
+    // parts (text, lines), which the app tints with the text colour; this one is drawn as it is.
+    std::vector<uint8_t> colour;
 };
 
 // The faces text may use (pointers stay owned by the caller). bold / italic may be null: the
@@ -32,6 +36,7 @@ struct FontSet {
 };
 
 // `scale` = output pixels per SVG unit. Throws Unsupported (and ParseError for broken SVG).
-InkImage rasterize_svg(const std::string& svg, float scale, const FontSet& fonts);
+// `keep_colour`: fill `InkImage::colour` instead of folding every colour into the ink mask.
+InkImage rasterize_svg(const std::string& svg, float scale, const FontSet& fonts, bool keep_colour = false);
 
 }  // namespace mermaid

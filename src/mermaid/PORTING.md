@@ -57,6 +57,41 @@ tiny-skia's 8-bit "lowp" blend). Text uses `textface.cpp` (HarfBuzz for shaping 
 outside this subset (radial gradients, filters, `<use>`, evenodd fills outside the C4 database symbol) throw
 `Unsupported`.
 
+## Deviations from mermaid-rs-renderer
+
+Everything above is byte parity with the crate. These are the places where Calligrus deliberately differs (bugs of the crate or
+things it cannot do); `calligrus-mermaid-test` checks each one in `run_deviation_tests()`, and the corpus files that the crate
+rejects but we draw are listed in `kRendersWhereRustRejects`.
+
+- **`<<annotation>>` lines in a class body** (`class R { <<interface>> ... }`, and `<<enumeration>>`, `<<service>>`...). The crate's
+  validator takes any line that starts with `<<` for an arrow without a source node and rejects the whole diagram ("unexpected
+  token '<<interface>>'"). Mermaid takes it, so `starts_with_arrow` (parser.cpp) lets `<<` followed by a letter through; the class
+  parser already handled stereotypes. The result equals the crate's output for `R : <<interface>>`.
+- **Sankey keeps its colours.** The crate folds every picture into a white-ink mask (`ink()`: alpha minus luminance), so a
+  sankey's palette fills and gradient flows turn into grey. For the kinds `render_mermaid_svg` reports through `keep_colour`
+  (the sankey) `rasterize_svg` draws chromatic paints (any colour that is not a pure grey, and every gradient) into a second,
+  transparent canvas and returns it as `InkImage::colour`; black text and lines stay in the ink mask. The app (math.cpp
+  `diagram_draw`) draws the colour layer as it is and the mask, tinted with the text colour, over it (the flows are "multiply" over the labels in the crate, which keeps black text black).
+- **Sankey layout like mermaid.js (d3-sankey).** The crate's layout never separates the nodes of a column (every node in the
+  first column sits at y = 0, later ones at the top of their first incoming link, so they overlap or touch), centres labels on
+  the node's rank rather than beside the node, and places an incoming band at "source's link top minus target top", so a band
+  can miss its target. `compute_sankey_layout` (kind_sankey.cpp) instead does what d3-sankey does: depth from the longest path
+  with sinks pushed to the last column ("justify"), node height = max(in, out) * one scale for all columns, 24 px padding
+  between the nodes of a column (the diagram grows taller when a column would not fit), six relaxation passes (each node moves
+  toward the value-weighted centre of its neighbours, then collisions are resolved), and link bands stacked from the node's top
+  at both ends in the order of the node at the other end. Labels sit beside their node, centred on it: left of the last
+  column, right of all others. Because the geometry differs, the layout text and SVG goldens of the sankey corpus
+  (`sankey-torture`, `sankey-t-basic`, `exp-sankey-energy`, `bench-sankey-medium`) are no longer compared (`kSankeyDeviates` in
+  mermaid_test.cpp); `run_deviation_tests()` checks the layout's invariants on them instead (padding, bands inside nodes,
+  heights = flow sums). Parsing, palette and the SVG writer's structure are unchanged.
+- **Maths in labels.** The crate turns `$$...$$` into a plain-text approximation (`x^2` becomes "x²", `rac{a}{b}` "(a)/(b)").
+  When the app registers its TeX engine (`set_math_hooks`, math.cpp) a label line that is exactly one `$$...$$` the engine can
+  typeset is measured from the real formula (display style) and drawn as a bitmap in the label colour: `normalize_display_math`
+  keeps it as a private-use marker line, the writer emits the plain text plus `data-tex="..."` on the `<tspan>`, and the
+  rasteriser draws the bitmap instead of the glyphs. Formulas the engine rejects, and formulas inside a sentence, keep the plain
+  approximation, and without hooks (the console test) the output is the crate's byte for byte. Taller formulas make their node
+  taller (`TextBlock::height`); lines of a multi-line label are still spaced evenly.
+
 ## Licences
 
 The renderer is a port of mermaid-rs-renderer (MIT); the rasteriser's fill and blend code is a port of tiny-skia

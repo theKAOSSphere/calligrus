@@ -134,7 +134,7 @@ float draw_diagram(const Ctx& c, const md::Block& b, float x, float y, float wid
         float fit = std::min(1.0f, width / d->px_w);
         float w = std::round(d->px_w * fit), h = std::round(d->px_h * fit);
         ImVec2 p0(std::round(x + (width - w) / 2), std::round(y));
-        c.dl->AddImage(d->tex, p0, ImVec2(p0.x + w, p0.y + h), ImVec2(0, 0), ImVec2(1, 1), c.color);
+        diagram_draw(c.dl, *d, p0, ImVec2(p0.x + w, p0.y + h), c.color);
         c.out.links.push_back({p0, ImVec2(p0.x + w, p0.y + h), "", "", 2, b.text, ""});  // a click zooms it (spec 27)
         return y + h;
     }

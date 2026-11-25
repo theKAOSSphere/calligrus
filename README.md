@@ -37,6 +37,15 @@ Everything here was made using the Claude family of models: `claude-opus-5-5` fo
 
 Download the archive for your system from the [Releases](../../releases) page, unzip it, and run `calligrus` (`calligrus.exe` on Windows). There's nothing to install.
 
+| System | Archive |
+| --- | --- |
+| Windows (x64) | `calligrus-<version>-windows-x64.zip` |
+| Linux, x86-64 (64-bit PC) | `calligrus-<version>-linux-x64.tar.gz` |
+| Linux, ARM64 (Raspberry Pi 3 and newer with a 64-bit system, other ARM boards) | `calligrus-<version>-linux-arm64.tar.gz` |
+| Android (arm64) | `calligrus-<version>-android-arm64.apk` |
+
+The Linux archives are built on Ubuntu 22.04 and need glibc 2.35 or newer (Debian 12, Ubuntu 22.04, and anything newer). They link no C++ runtime or graphics library: the window system and OpenGL are loaded from the system when the program starts, so any machine with a working OpenGL 2.1 (or OpenGL ES 2.0) driver runs them.
+
 On Windows, `calligrus --register` adds it to "Open with" for `.md` and `.org` files (per user, no admin), and `calligrus --unregister` removes that again.
 
 To build it yourself, see [BUILDING.md](BUILDING.md).

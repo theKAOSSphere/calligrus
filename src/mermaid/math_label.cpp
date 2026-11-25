@@ -171,6 +171,53 @@ std::string render_plain_math(const std::string& input) {
 
 }  // namespace
 
+namespace {
+MathHooks& hooks_slot() {
+    static MathHooks h;
+    return h;
+}
+bool ends_with_line_break(const std::string& s) {
+    size_t e = s.size();
+    while (e > 0 && (s[e - 1] == ' ' || s[e - 1] == '\t')) --e;
+    const std::string v = s.substr(0, e);
+    return v.empty() || v.back() == '\n' || ends_with(v, "<br/>") || ends_with(v, "<br>") || ends_with(v, "\n");
+}
+bool starts_with_line_break(const std::string& s) {
+    size_t b = 0;
+    while (b < s.size() && (s[b] == ' ' || s[b] == '\t')) ++b;
+    const std::string v = s.substr(b);
+    return v.empty() || v.front() == '\n' || starts_with(v, "<br/>") || starts_with(v, "<br>") || starts_with(v, "\n");
+}
+}  // namespace
+
+void set_math_hooks(MathHooks hooks) { hooks_slot() = std::move(hooks); }
+const MathHooks& math_hooks() { return hooks_slot(); }
+bool math_hooks_active() { return static_cast<bool>(hooks_slot().measure) && static_cast<bool>(hooks_slot().render); }
+
+bool is_math_marker_line(const std::string& line, std::string* tex) {
+    const std::string open = kMathOpen, close = kMathClose;
+    std::string t = trim(line);
+    if (!starts_with(t, open) || !ends_with(t, close) || t.size() < open.size() + close.size()) return false;
+    if (tex) *tex = t.substr(open.size(), t.size() - open.size() - close.size());
+    return true;
+}
+
+std::string math_marker_plain(const std::string& line) {
+    std::string tex;
+    if (!is_math_marker_line(line, &tex)) return line;
+    return render_plain_math(tex);
+}
+
+float math_line_extra_height(const std::string& line, float font_size, float line_height) {
+    std::string tex;
+    if (!is_math_marker_line(line, &tex) || !math_hooks_active()) return 0.0f;
+    auto box = math_hooks().measure(tex, font_size);
+    if (!box) return 0.0f;
+    // the formula plus a little air above and below
+    float want = box->ascent + box->descent + font_size * 0.3f;
+    return std::max(0.0f, want - line_height);
+}
+
 std::string normalize_display_math(const std::string& text) {
     if (text.find("$$") == std::string::npos) return text;
     std::string out;
@@ -182,8 +229,15 @@ std::string normalize_display_math(const std::string& text) {
         std::string after_start = rest.substr(start + 2);
         size_t end = after_start.find("$$");
         if (end != std::string::npos) {
-            out += render_plain_math(after_start.substr(0, end));
-            rest = after_start.substr(end + 2);
+            const std::string tex = after_start.substr(0, end);
+            const std::string tail = after_start.substr(end + 2);
+            // A formula alone on its line goes to the TeX engine when one is registered and can typeset it.
+            const bool alone = ends_with_line_break(out) && starts_with_line_break(tail);
+            if (alone && math_hooks_active() && !trim(tex).empty() && tex.find(kMathOpen) == std::string::npos && math_hooks().measure(trim(tex), 16.0f))
+                out += std::string(kMathOpen) + trim(tex) + kMathClose;
+            else
+                out += render_plain_math(tex);
+            rest = tail;
         } else {
             out += "$$";
             out += after_start;

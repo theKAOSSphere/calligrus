@@ -398,8 +398,10 @@ highlighted (`Action::ThemePicker` in `navigation.cpp`; the dropdown itself is `
   `CMAKE_MSVC_RUNTIME_LIBRARY` is `MultiThreaded` (/MT). Result: `calligrus.exe` runs with no DLLs and (with §8) no
   assets folder. Check with `dumpbin /dependents`: only system DLLs (kernel32, user32,
   gdi32, opengl32, shell32, comdlg32, dwmapi, ...).
-- On Linux the libraries are static too (built from source by `cmake/deps.cmake`); the executable only links the
-  system's libc, libstdc++ and X11/GL.
+- On Linux the libraries are static too (built from source by `cmake/deps.cmake`), and so is the C++ runtime
+  (`-static-libstdc++ -static-libgcc`); the executable needs only libc and libm. GLFW opens X11 / Wayland / EGL itself at
+  run time, and Calligrus's own OpenGL calls are loaded from the context (§36), so no GL library is linked either. The
+  release builds run on Ubuntu 22.04 / Debian 12 and newer (`scripts/check-portable.sh`, see `BUILDING.md`).
 
 ## 11. Icon, keys, links, history, state file
 
@@ -554,7 +556,7 @@ output every time.
 - **No visible window, ever**: no window shown, no taskbar entry, no focus
   change, nothing drawn on screen. Rendering goes through the normal pipeline
   (GLFW + OpenGL3), into an offscreen target if a
-  hidden window's default framebuffer isn't reliable (FBO + `glReadPixels`).
+  hidden window's default framebuffer isn't reliable (FBO + `glReadPixels`; without FBOs see §36).
   Must also work while the workstation is locked. DPI scale = 1.0 in script
   mode unless `scale` says otherwise, so output doesn't depend on the monitor.
 - **Script**: UTF-8 text, one command per line, `#` comments, blank lines ok.
@@ -728,7 +730,7 @@ Calligrus window per editor session shows whichever previewed buffer is current.
 
 ## 19. Linux
 
-- Calligrus builds and runs on Linux x86_64 with the same features, config/state paths (§5)
+- Calligrus builds and runs on Linux x86_64 and ARM64 (release archives for both) with the same features, config/state paths (§5)
   and headless `--script` mode as on Windows.
 - Windows-only features compile out cleanly on Linux with a clear message:
   `--register`/`--unregister` ("Windows only"), dark title bar, console attach.
@@ -1764,6 +1766,7 @@ sections above. Build: BUILDING.md. Desktop behaviour is unchanged (the visual s
   there is room for fewer than 3 characters. The desktop has the three-dot button only below 400 px of toolbar width, so its
   usual window sizes (the visual suite's included) are unchanged. On Android the button comes at any width where the buttons do not fit (a landscape tablet shows everything). Whenever the settings gear lands in the three-dot menu (Android or desktop) it is the text entry "Settings", like the other entries; on the bar itself it stays the gear icon. On a
   screen narrower than 600 dp (a phone upright) the outline panel starts hidden.
+- **Settings**: desktop-only controls are hidden on Android: the font "Browse…" buttons, "Remember window size and position", "Show the cursor marker in editor previews", "Open config file", and "Open themes folder" (config fields remain in `config.toml` unchanged).
 - **Opening files**: the Open button starts Android's document picker (`ACTION_OPEN_DOCUMENT`, `text/*`,
   `application/octet-stream`, any name: `.md`, `.markdown`, `.org`). The app is also offered by "Open with" (`VIEW` with
   Markdown / Org / plain-text types, or a path ending in `.md`, `.markdown`, `.org`) and by "Share" (`SEND`, a file
@@ -1807,3 +1810,14 @@ sections above. Build: BUILDING.md. Desktop behaviour is unchanged (the visual s
   laid out. Other crashes in such a build can only be caught from the second one on.
 - **Later work**: the soft keyboard, slides and the presenter, PDF export, text selection by long press and handles,
   the outline as a drawer on narrow screens, relative pictures (copy the document's folder, or read it through the storage framework), a share-out, a Play build.
+
+
+## 36. Old graphics drivers
+
+The aim is a machine such as a Raspberry Pi 3B (Mesa vc4: OpenGL 2.1 / OpenGL ES 2.0, textures up to 2048 px) drawing with its GPU, not in software.
+
+- **Context fallback (desktop)**: the first context that can be created, in this order: OpenGL 3.3 core (`#version 330`), OpenGL 3.0 (`#version 130`), OpenGL 2.1 (`#version 120`, no profile asked for), OpenGL ES 2.0 over EGL (`#version 100`). The GLSL string given to ImGui's OpenGL backend matches the level. Every attempt is a hidden window (the window is only shown once the theme is applied), a refused level creates nothing and its GLFW error is not printed, and a context that exists but lacks what the renderer needs (ES 2.0 without the vertex array calls the backend uses) is destroyed before the next try, so nothing flashes. The presenter window (§26) asks for the same kind of context as the main window, so the two share their textures. The level reached is in the trace (`CALLIGRUS_TRACE`: the level, GL version and renderer strings, the texture limit). Android stays OpenGL ES 3.0 (§35).
+- **Texture limit**: `GL_MAX_TEXTURE_SIZE` is read once after the context exists (`src/gl_caps.h`, never below 256) and every upload respects it. A picture larger than the limit is shrunk with an area filter (aspect kept) before it is uploaded and still lays out at its own size. A formula that is too big is resampled the same way (its layout box is untouched); a Mermaid diagram is drawn again at a smaller scale that fits (it is shown at the wanted size, a little soft). The shaped-glyph pages (§32) are never larger than the limit. An upload the driver refuses is reported on stderr and in the trace, and that picture, formula or diagram is not drawn; it is never silent. Textures use clamp-to-edge wrapping (OpenGL ES 2.0 requires it for sizes that are not a power of two).
+- **Framebuffer objects**: only script mode (§14) uses them, to render off screen for `shot` and the PDF export. The entry points are looked up by their GL 3.0 / ES 2.0 names, then by the `EXT` names. If neither exists the frames are drawn into the hidden window's own framebuffer, which is resized to the script's size, and `shot` reads that back; a window that cannot have that size (a window larger than the screen; a minimum width) stops the script with a message, which in practice means the PDF export (its paper-sized frames, taller than a screen) needs framebuffer objects, while ordinary scripts and `shot` work. Normal viewing needs no framebuffer objects.
+- **No GL library on Linux**: the 14 OpenGL 1.1 functions Calligrus calls itself (textures, pixel storage, `glReadPixels`, viewport, clear, `glGetString`...) are function pointers, `src/gl_funcs.h`, filled by `gl_funcs_load()` with `glfwGetProcAddress` right after each context is made current (so a context of another kind, the ES 2.0 fallback, loads its own). A context that lacks one is treated like an unusable level. Calls therefore reach the implementation that made the context (the EGL / GLES library under the ES 2.0 fallback), and the executable does not link `libOpenGL`/`libGL`. Windows (opengl32) and Android (GLESv3) link as before and call the functions directly. The presenter window shares the main window's context type, so the pointers serve both.
+- **Test overrides** (read once at start-up): `CALLIGRUS_GL=3.3|3.0|2.1|es2` forces one level and exits with a message if it cannot be created; `CALLIGRUS_MAX_TEXTURE=<n>` pretends the limit is n (at least 256, at most the real one); `CALLIGRUS_GL_NO_FBO=1` takes the path without framebuffer objects. The visual suite passes under each of them (with `CALLIGRUS_GL_NO_FBO` all but the PDF exports).

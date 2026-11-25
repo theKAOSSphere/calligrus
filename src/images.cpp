@@ -1,5 +1,8 @@
 #include "images.h"
 
+#include "gl_caps.h"
+#include "trace.h"
+
 #include <map>
 #include <optional>
 #include <vector>
@@ -20,7 +23,7 @@
 #ifdef __ANDROID__
 #include <GLES3/gl3.h>
 #else
-#include <GL/gl.h>  // GL 1.1 texture calls are exported by opengl32 directly
+#include "gl_funcs.h"  // (GL 1.1 calls: opengl32 on Windows, function pointers on Linux)
 #endif
 
 #include "platform.h"
@@ -116,14 +119,31 @@ const LoadedImage* image_get(const std::filesystem::path& path, const std::vecto
         if (auto px = decode(*bytes)) {
             shrink_to_fit(*px);
             imagefilter::apply(px->rgba, px->w, px->h, filters);
+            // The layout size stays the picture's own; only the texture is cut down to what the GPU takes (spec 36).
+            const float lay_w = float(px->w), lay_h = float(px->h);
+            const double fit = glcaps::fit_factor(px->w, px->h);
+            if (fit < 1.0) {
+                const int nw = std::max(1, int(std::lround(px->w * fit))), nh = std::max(1, int(std::lround(px->h * fit)));
+                trace::log("picture %dx%d is over the texture limit %d: uploaded as %dx%d", px->w, px->h, glcaps::max_texture(), nw, nh);
+                px->rgba = glcaps::resample_rgba(px->rgba.data(), px->w, px->h, nw, nh);
+                px->w = nw, px->h = nh;
+            }
+            while (glGetError() != GL_NO_ERROR) {}
             GLuint id = 0;
             glGenTextures(1, &id);
             glBindTexture(GL_TEXTURE_2D, id);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, 0x812F);  // CLAMP_TO_EDGE (GLES 2 wants it for non-power-of-two textures)
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, 0x812F);
             glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, px->w, px->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, px->rgba.data());
-            result = LoadedImage{static_cast<ImTextureID>(id), float(px->w), float(px->h)};
+            if (const GLenum err = glGetError(); err != GL_NO_ERROR) {
+                glcaps::upload_failed("picture", unsigned(err), px->w, px->h);
+                glDeleteTextures(1, &id);
+            } else {
+                result = LoadedImage{static_cast<ImTextureID>(id), lay_w, lay_h};
+            }
         }
     }
     auto& slot = cache[k] = Entry{result, when};

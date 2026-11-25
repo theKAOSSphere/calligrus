@@ -1,0 +1,17 @@
+size 826.09546 646.30005
+node Block 236.90074 539.30005 63.848846 91 hidden=false lines=["Block"] label=39.848846x17.850002
+node CodeBlock 310.74957 511.2 95.72793 91 hidden=false lines=["CodeBlock"] label=71.72793x17.850002
+node DocState 228.54655 324.2 258.214 166.80002 hidden=false lines=["DocState", "---", "+path: fs::path", "+doc: md::Document", "+cache: LayoutCache", "---", "+load(path) : bool", "-too_large_note() : string"] label=207.214x142.80002
+node GpuRenderer 536.7605 153.40001 111.667465 91 hidden=false lines=["GpuRenderer"] label=87.667465x17.850002
+node MathBlock 416.4775 511.2 95.72793 91 hidden=false lines=["MathBlock"] label=71.72793x17.850002
+node Paragraph 75.378494 511.2 95.72793 91 hidden=false lines=["Paragraph"] label=71.72793x17.850002
+node PdfRenderer 698.428 153.40001 111.667465 91 hidden=false lines=["PdfRenderer"] label=87.667465x17.850002
+node Renderer 568.12335 8 210.39539 95.40001 hidden=false lines=["<<interface>>", "Renderer", "---", "+draw(Block&) : void"] label=159.39539x71.40001
+node Tab 8 153.40001 170.54654 95.40001 hidden=false lines=["Tab", "---", "+st: DocState", "+slides: Slides"] label=119.54654x71.40001
+edge Tab->DocState (125.27327,248.80002) (309.65356,324.2) anchor=None
+edge DocState->Block (325.65356,491.00003) (275.23935,491.00003) (275.23935,539.30005) (284.82516,539.30005) anchor=None
+edge Block->Paragraph (221.2669,578.123) (171.10641,556.7) anchor=None
+edge Block->CodeBlock (300.74957,568.80005) (310.74957,572.7) anchor=None
+edge Block->MathBlock (316.63528,594.7465) (416.4775,556.7) anchor=None
+edge Renderer->GpuRenderer (632.0109,117.624) (608.59424,153.40001) anchor=None
+edge Renderer->PdfRenderer (714.67365,117.59611) (738.2617,153.40001) anchor=None

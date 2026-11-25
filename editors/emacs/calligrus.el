@@ -3,7 +3,7 @@
 ;; Copyright (C) 2026 KαΩSS (theKAOSSphere)
 ;; Author: KαΩSS (theKAOSSphere)
 ;; URL: https://github.com/theKAOSSphere/calligrus
-;; Version: 0.4.0
+;; Version: 0.5.0
 ;; Package-Requires: ((emacs "27.1"))
 ;; Keywords: markdown, outlines, convenience, tools
 ;; SPDX-License-Identifier: GPL-3.0-or-later

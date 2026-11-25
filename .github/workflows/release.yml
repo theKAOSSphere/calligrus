@@ -1,6 +1,6 @@
 name: Release
 
-# Push a tag such as v0.1.0 to publish the packages (Windows, Linux, signed Android APK) as a DRAFT release.
+# Push a tag such as v0.1.0 to publish the packages (Windows, Linux x86-64 and ARM64, signed Android APK) as a DRAFT release.
 # The packages are the ones CI built for the tagged commit (ci.yml, artifacts calligrus-*): this workflow waits for
 # that CI run and reuses its artifacts. Without a successful CI run of that commit (CI failed, never ran, or its
 # artifacts expired) the packages are built here, as before, so a release does not depend on CI.
@@ -18,7 +18,7 @@ env:
   CALLIGRUS_DOWNLOAD_DIR: ${{ github.workspace }}/.deps-cache
 
 jobs:
-  # Decides where the packages come from: the newest successful CI run of this commit that still has all three
+  # Decides where the packages come from: the newest successful CI run of this commit that still has all four
   # packages (reuse), or the build jobs below (fallback). Waits up to 40 minutes for a CI run that is still going.
   prepare:
     runs-on: ubuntu-latest
@@ -48,7 +48,7 @@ jobs:
               names=$(gh api "repos/$REPO/actions/runs/$id/artifacts?per_page=100" \
                 --jq '[.artifacts[] | select(.expired | not) | .name] | join(" ")' 2>/dev/null) || names=""
               ok=true
-              for n in calligrus-windows-x64 calligrus-linux-x64 calligrus-android; do
+              for n in calligrus-windows-x64 calligrus-linux-x64 calligrus-linux-arm64 calligrus-android; do
                 case " $names " in *" $n "*) ;; *) ok=false ;; esac
               done
               if [ "$ok" = true ]; then
@@ -128,10 +128,23 @@ jobs:
           retention-days: 90
           if-no-files-found: error
 
+  # Same as the CI job (ci.yml says why Ubuntu 22.04 and GCC 12).
   linux:
+    name: linux (${{ matrix.arch }})
     needs: prepare
     if: always() && needs.prepare.outputs.reuse != 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-22.04
+          - arch: arm64
+            runner: ubuntu-22.04-arm
+    env:
+      CC: gcc-12
+      CXX: g++-12
     steps:
       - uses: actions/checkout@v4
 
@@ -145,12 +158,15 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake ninja-build pkg-config \
+          sudo apt-get install -y build-essential gcc-12 g++-12 pkg-config \
             libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl-dev \
             libxkbcommon-dev libwayland-dev wayland-protocols libxext-dev
 
       - name: Build (Release)
         run: bash build.sh
+
+      - name: Check that the build is portable
+        run: bash scripts/check-portable.sh build/calligrus 2.35
 
       - name: Run the console tests
         run: |
@@ -163,7 +179,7 @@ jobs:
 
       - name: Package (as CI)
         run: |
-          name="calligrus-linux-x64"
+          name="calligrus-linux-${{ matrix.arch }}"
           mkdir -p "$name/fonts"
           cp build/calligrus LICENSE THIRD-PARTY.md "$name/"
           cp assets/fonts/*.txt "$name/fonts/"
@@ -172,8 +188,8 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: calligrus-linux-x64
-          path: calligrus-linux-x64.tar.gz
+          name: calligrus-linux-${{ matrix.arch }}
+          path: calligrus-linux-${{ matrix.arch }}.tar.gz
           retention-days: 90
           if-no-files-found: error
 
@@ -262,7 +278,7 @@ jobs:
         if: always()
         run: rm -f "$RUNNER_TEMP/calligrus-release.jks"
 
-  # Gathers the three packages (from the reused CI run, or from the build jobs above), names them after the tag
+  # Gathers the four packages (from the reused CI run, or from the build jobs above), names them after the tag
   # and creates the draft release. The archives keep the layout of earlier releases: the folder inside is named
   # after the tag (CI packages them without the version).
   release:
@@ -304,14 +320,16 @@ jobs:
           unzip -q calligrus-windows-x64.zip -d ../unpack/win
           mv ../unpack/win/calligrus-windows-x64 "../unpack/win/calligrus-$TAG-windows-x64"
           (cd ../unpack/win && zip -qr "$out/calligrus-$TAG-windows-x64.zip" "calligrus-$TAG-windows-x64")
-          # Linux: the same, as a tar.gz.
+          # Linux (x86-64 and ARM64): the same, as a tar.gz.
           mkdir -p ../unpack/lin
-          tar xzf calligrus-linux-x64.tar.gz -C ../unpack/lin
-          mv ../unpack/lin/calligrus-linux-x64 "../unpack/lin/calligrus-$TAG-linux-x64"
-          tar czf "calligrus-$TAG-linux-x64.tar.gz" -C ../unpack/lin "calligrus-$TAG-linux-x64"
+          for arch in x64 arm64; do
+            tar xzf "calligrus-linux-$arch.tar.gz" -C ../unpack/lin
+            mv "../unpack/lin/calligrus-linux-$arch" "../unpack/lin/calligrus-$TAG-linux-$arch"
+            tar czf "calligrus-$TAG-linux-$arch.tar.gz" -C ../unpack/lin "calligrus-$TAG-linux-$arch"
+          done
           # Android: the APK is already signed (CI or the build above) and only needs the tag in its name.
           cp calligrus-android-arm64.apk "calligrus-$TAG-android-arm64.apk"
-          rm -f calligrus-windows-x64.zip calligrus-linux-x64.tar.gz calligrus-android-arm64.apk
+          rm -f calligrus-windows-x64.zip calligrus-linux-x64.tar.gz calligrus-linux-arm64.tar.gz calligrus-android-arm64.apk
           ls -l
 
       - name: Install the Android build-tools (apksigner)
@@ -337,4 +355,5 @@ jobs:
           files: |
             dist/calligrus-*-windows-x64.zip
             dist/calligrus-*-linux-x64.tar.gz
+            dist/calligrus-*-linux-arm64.tar.gz
             dist/calligrus-*-android-arm64.apk

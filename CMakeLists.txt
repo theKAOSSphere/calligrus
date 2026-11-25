@@ -11,7 +11,7 @@ if(WIN32 AND NOT CALLIGRUS_USE_SYSTEM_LIBS)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
-project(calligrus VERSION 0.4.0 LANGUAGES C CXX)
+project(calligrus VERSION 0.5.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -52,13 +52,19 @@ else()
     set(CALLIGRUS_PLATFORM_LIBS "")
     find_package(Threads REQUIRED)
     link_libraries(Threads::Threads)
+    # Portable Linux binary: the C++ runtime is linked in (only libc and libm stay dynamic; GLFW opens X11 / Wayland / EGL
+    # itself, and the GL calls go through src/gl_funcs.h), so it runs on any distribution whose glibc is old enough.
+    # (Before the targets are created: it applies to the ones made afterwards, tests included.)
+    if(NOT APPLE)
+        add_link_options(-static-libstdc++ -static-libgcc)
+    endif()
     add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-Wno-unknown-pragmas>)  # MSVC-only `#pragma warning` lines
 endif()
 
 # Third-party libraries (FetchContent, or the system's with CALLIGRUS_USE_SYSTEM_LIBS): imgui, md4c, glfw, stb,
 # libwebp, toml++, HarfBuzz, zlib, FreeType.
 include(cmake/deps.cmake)
-if(NOT ANDROID)  # (Android: EGL and OpenGL ES come from the NDK, the window from GameActivity)
+if(WIN32)  # (Android: EGL and OpenGL ES come from the NDK. Linux: no GL library is linked, src/gl_funcs.h loads the calls)
     find_package(OpenGL REQUIRED)
 endif()
 
@@ -88,6 +94,7 @@ set(CALLIGRUS_SOURCES
     ${CALLIGRUS_PLATFORM_SRC}
     src/math.cpp
     src/images.cpp
+    src/gl_funcs.cpp
     src/select.cpp
     src/find.cpp
     src/navigation.cpp
@@ -120,7 +127,10 @@ target_link_libraries(calligrus PRIVATE
     md4c::md4c
 )
 if(NOT ANDROID)
-    target_link_libraries(calligrus PRIVATE glfw OpenGL::GL)
+    target_link_libraries(calligrus PRIVATE glfw)
+endif()
+if(WIN32)
+    target_link_libraries(calligrus PRIVATE OpenGL::GL)
 endif()
 if(WIN32)
     target_link_libraries(calligrus PRIVATE

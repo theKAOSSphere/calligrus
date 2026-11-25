@@ -40,12 +40,14 @@
 #ifndef APIENTRY
 #define APIENTRY
 #endif
-constexpr const char* kGlslVersion = "#version 300 es";
+constexpr const char* g_glsl_version = "#version 300 es";
 #else
 #include <imgui_impl_glfw.h>
 
 #include <GLFW/glfw3.h>
-constexpr const char* kGlslVersion = "#version 330";
+#include "gl_funcs.h"  // after GLFW: on Linux the gl* calls are function pointers loaded from the context
+// The GLSL version of the context that was created (open_gl_window below picks it).
+static const char* g_glsl_version = "#version 330";
 #endif
 #ifdef _WIN32
 // glfw3native.h pulls in <windows.h>; NOMINMAX stops it defining min/max
@@ -66,6 +68,7 @@ static void* native_window(GLFWwindow*) { return nullptr; }
 #include "editor.h"
 #include "find.h"
 #include "font_index.h"
+#include "gl_caps.h"
 #include "trace.h"
 #include "sysfont.h"
 #include "fonts.h"
@@ -333,8 +336,92 @@ static void save_state_guarded(const fs::path& file, const session::State& state
     if (!g_script_mode) session::save_state(file, state, remember_window);
 }
 
+#ifndef __ANDROID__
+// The OpenGL contexts we can draw with, best first (spec 36). ImGui's GL backend runs on each with the GLSL string given.
+struct GlLevel {
+    const char* name;  // for the trace
+    const char* key;   // CALLIGRUS_GL=<key> forces this one
+    int api, major, minor, profile;
+    const char* glsl;
+};
+static const GlLevel kGlLevels[] = {
+    {"OpenGL 3.3 core", "3.3", GLFW_OPENGL_API, 3, 3, GLFW_OPENGL_CORE_PROFILE, "#version 330"},
+    {"OpenGL 3.0", "3.0", GLFW_OPENGL_API, 3, 0, GLFW_OPENGL_ANY_PROFILE, "#version 130"},
+    {"OpenGL 2.1", "2.1", GLFW_OPENGL_API, 2, 1, GLFW_OPENGL_ANY_PROFILE, "#version 120"},
+    {"OpenGL ES 2.0", "es2", GLFW_OPENGL_ES_API, 2, 0, GLFW_OPENGL_ANY_PROFILE, "#version 100"},
+};
+static const GlLevel* g_gl_level = nullptr;  // the one the main window got (the presenter window asks for the same)
+
+// Window hints for one level (they replace all earlier hints, so every window of the app is made the same way).
+static void apply_gl_hints(const GlLevel& l) {
+    glfwDefaultWindowHints();
+    glfwWindowHint(GLFW_CLIENT_API, l.api);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, l.major);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, l.minor);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, l.profile);
+    glfwWindowHint(GLFW_CONTEXT_CREATION_API, l.api == GLFW_OPENGL_ES_API ? GLFW_EGL_CONTEXT_API : GLFW_NATIVE_CONTEXT_API);
+}
+
+// The main window, with the best context the driver gives: GL 3.3 core, else 3.0, 2.1, ES 2.0 (CALLIGRUS_GL=3.3|3.0|2.1|es2 tries
+// only that one). Every attempt is a hidden window (nothing flashes); a refused one never exists, and one that exists but is
+// unusable is destroyed before the next try. On success the context is current and g_gl_level / g_glsl_version are set; on
+// failure the result is null and `why` says so.
+static GLFWwindow* open_gl_window(int w, int h, const char* title, std::string& why) {
+#pragma warning(suppress : 4996)  // MSVC: getenv is fine (read once, at start-up)
+    const char* forced = std::getenv("CALLIGRUS_GL");
+    if (forced && !*forced) forced = nullptr;
+    bool known = !forced;
+    for (const GlLevel& l : kGlLevels) known = known || std::string(forced) == l.key;
+    if (!known) {
+        why = std::string("CALLIGRUS_GL=") + forced + " is not one of 3.3, 3.0, 2.1, es2";
+        return nullptr;
+    }
+    const auto previous = glfwSetErrorCallback(nullptr);  // (a refused level is expected: no message for it)
+    std::string last = "no context";
+    GLFWwindow* win = nullptr;
+    for (const GlLevel& l : kGlLevels) {
+        if (forced && std::string(forced) != l.key) continue;
+        apply_gl_hints(l);
+        glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);  // shown later, once the theme is applied
+        win = glfwCreateWindow(w, h, title, nullptr, nullptr);
+        if (!win) {
+            const char* desc = nullptr;
+            glfwGetError(&desc);
+            last = std::string(l.name) + ": " + (desc ? desc : "refused");
+            trace::log("context %s refused (%s)", l.name, desc ? desc : "no reason given");
+            continue;
+        }
+        glfwMakeContextCurrent(win);
+        if (!gl_funcs_load()) {  // (the GL entry points of this context; on Linux nothing links a GL library)
+            last = std::string(l.name) + ": the context lacks basic OpenGL functions";
+            glfwMakeContextCurrent(nullptr);
+            glfwDestroyWindow(win);
+            win = nullptr;
+            continue;
+        }
+        // ImGui's backend is the desktop one: on ES 2.0 it needs the vertex array calls (GL_OES_vertex_array_object).
+        const bool usable = glGetString(GL_VERSION) != nullptr && (l.api != GLFW_OPENGL_ES_API || glfwGetProcAddress("glGenVertexArrays") != nullptr);
+        if (!usable) {
+            last = std::string(l.name) + ": the context lacks what the renderer needs";
+            trace::log("context %s unusable, destroyed", l.name);
+            glfwMakeContextCurrent(nullptr);
+            glfwDestroyWindow(win);
+            win = nullptr;
+            continue;
+        }
+        g_gl_level = &l;
+        g_glsl_version = l.glsl;
+        break;
+    }
+    glfwSetErrorCallback(previous);
+    if (!win) why = forced ? std::string("CALLIGRUS_GL=") + forced + ": cannot create that context (" + last + ")" : "no OpenGL context could be created (" + last + ")";
+    return win;
+}
+#endif
+
 // Offscreen render target (FBO) for script mode: works for a hidden window and
-// a locked workstation. FBO entry points come from glfwGetProcAddress.
+// a locked workstation. FBO entry points come from glfwGetProcAddress: the GL 3.0 / ES 2.0 names, else the EXT names
+// (GL 2.1 drivers with GL_EXT_framebuffer_object). With neither, `direct` is set (see below).
 struct Offscreen {
     using GenFn = void(APIENTRY*)(GLsizei, GLuint*);
     using BindFn = void(APIENTRY*)(GLenum, GLuint);
@@ -349,19 +436,50 @@ struct Offscreen {
     StatusFn status = nullptr;
     GLuint fbo = 0, rb = 0;
     int w = 0, h = 0;
+    // No framebuffer objects at all: the frames are drawn into the (hidden) window's own framebuffer, which is resized to
+    // the script's size, and `shot` reads that back. A window cannot always be that size (a minimum width, a desktop that
+    // limits it), so this is the fallback and not the way.
+    bool direct = false;
+    GLFWwindow* win = nullptr;
 
+    static void* proc(const char* name) {
+        if (void* p = reinterpret_cast<void*>(glfwGetProcAddress(name))) return p;
+        return reinterpret_cast<void*>(glfwGetProcAddress((std::string(name) + "EXT").c_str()));
+    }
     bool load() {
-        gen_fb = GenFn(glfwGetProcAddress("glGenFramebuffers"));
-        gen_rb = GenFn(glfwGetProcAddress("glGenRenderbuffers"));
-        bind_fb = BindFn(glfwGetProcAddress("glBindFramebuffer"));
-        bind_rb = BindFn(glfwGetProcAddress("glBindRenderbuffer"));
-        storage = StorageFn(glfwGetProcAddress("glRenderbufferStorage"));
-        attach = AttachFn(glfwGetProcAddress("glFramebufferRenderbuffer"));
-        status = StatusFn(glfwGetProcAddress("glCheckFramebufferStatus"));
+#pragma warning(suppress : 4996)  // MSVC: getenv is fine for a test switch
+        if (const char* no = std::getenv("CALLIGRUS_GL_NO_FBO"); no && *no) return false;  // (test: take the `direct` path)
+        gen_fb = GenFn(proc("glGenFramebuffers"));
+        gen_rb = GenFn(proc("glGenRenderbuffers"));
+        bind_fb = BindFn(proc("glBindFramebuffer"));
+        bind_rb = BindFn(proc("glBindRenderbuffer"));
+        storage = StorageFn(proc("glRenderbufferStorage"));
+        attach = AttachFn(proc("glFramebufferRenderbuffer"));
+        status = StatusFn(proc("glCheckFramebufferStatus"));
         return gen_fb && gen_rb && bind_fb && bind_rb && storage && attach && status;
+    }
+    // Make the target the one drawn to and read from.
+    void bind() const {
+        if (!direct) bind_fb(kFramebuffer, fbo);
     }
     // Bind a target of this size (re-allocated when the size changes).
     bool use(int nw, int nh) {
+#ifndef __ANDROID__
+        if (direct) {
+            if (nw != w || nh != h) {
+                glfwSetWindowSize(win, nw, nh);
+                w = nw;
+                h = nh;
+            }
+            int fw = 0, fh = 0;
+            glfwGetFramebufferSize(win, &fw, &fh);
+            if (fw != nw || fh != nh) {
+                glfwPollEvents();  // (the size change may still be on its way)
+                glfwGetFramebufferSize(win, &fw, &fh);
+            }
+            return fw == nw && fh == nh;
+        }
+#endif
         if (!fbo) {
             gen_fb(1, &fbo);
             gen_rb(1, &rb);
@@ -2048,14 +2166,7 @@ static void draw_toast(DocState& st, const Fonts& fonts, const Theme& theme, ImV
 // Inside it: the wheel zooms about the pointer, a drag pans, a double click is back to the fit, the keys + - 0
 // (Android: a pinch and a one-finger drag, a tap closes, Back too). A diagram is drawn again at the zoomed size.
 // A window of its own, so the document under it gets no hover or clicks.
-static int gl_max_texture_size() {
-    static const int n = [] {
-        GLint v = 0;
-        glGetIntegerv(GL_MAX_TEXTURE_SIZE, &v);
-        return v > 0 ? int(v) : 4096;
-    }();
-    return n;
-}
+static int gl_max_texture_size() { return glcaps::max_texture(); }  // (read once after the context was made, spec 36)
 
 static void close_lightbox(DocState& st) {
     if (st.lightbox && st.lightbox->zoom != 1 && st.lbv.base_scale > 0) st.lbv.trim_src = st.lightbox->zoom_src, st.lbv.trim_base = st.lbv.base_scale;
@@ -2189,7 +2300,7 @@ static void draw_lightbox(DocState& st, const Fonts& fonts, const Theme& theme, 
             }
             const MathTex* d = diagram_get(lb.zoom_src, 1.05f * scale * v.k);
             if (!d) d = nat_d;
-            dl->AddImage(d->tex, p, q, ImVec2(0, 0), ImVec2(1, 1), theme.text);
+            diagram_draw(dl, *d, p, q, theme.text);
         }
         if (!caption.empty()) {  // (under the fitted card; over the picture, on a dark pill, when it is zoomed in)
             const float em = 15.0f * scale;
@@ -3617,14 +3728,22 @@ int main() {
     glfwSetErrorCallback([](int code, const char* msg) { std::fprintf(stderr, "GLFW %d: %s\n", code, msg); });
     if (!glfwInit()) return 1;
 
-    // OpenGL 3.3 core profile; ImGui's GL3 backend draws everything on the GPU.
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    // Start hidden: shown once the theme (incl. dark title bar) has been applied.
+    // ImGui's GL3 backend draws everything on the GPU. Desktop: the best context there is (open_gl_window, hidden until the
+    // theme is applied); Android: OpenGL ES 3.0 from the window layer.
+#ifdef __ANDROID__
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
     GLFWwindow* window = glfwCreateWindow(1100, 800, "Calligrus", nullptr, nullptr);
     if (!window) return 1;
+#else
+    std::string gl_why;
+    GLFWwindow* window = open_gl_window(1100, 800, "Calligrus", gl_why);
+    if (!window) {
+        std::fprintf(stderr, "calligrus: %s\n", gl_why.c_str());
+        trace::log("%s", gl_why.c_str());
+        if (g_script_mode) script_log(gl_why, true);
+        return 1;
+    }
+#endif
     // Window / taskbar icon: the 256 px PNG embedded in the exe (the exe's own icon is src/app.rc).
     if (auto png = resource("icon-256.png")) {
         int iw = 0, ih = 0, n = 0;
@@ -3636,6 +3755,22 @@ int main() {
         }
     }
     glfwMakeContextCurrent(window);
+    {  // what the context allows: one texture limit for every upload (gl_caps.h); CALLIGRUS_MAX_TEXTURE=<n> pretends it is smaller
+        GLint limit = 0;
+        glGetIntegerv(GL_MAX_TEXTURE_SIZE, &limit);
+        const int real = limit > 0 ? int(limit) : 2048;
+        int cap = real;
+#pragma warning(suppress : 4996)  // MSVC: getenv is fine (read once, at start-up)
+        if (const char* v = std::getenv("CALLIGRUS_MAX_TEXTURE"); v && *v) cap = std::min(real, std::max(256, std::atoi(v)));
+        glcaps::set_max_texture(cap);
+#ifdef __ANDROID__
+        trace::log("OpenGL ES context, max texture %d (driver says %d)", glcaps::max_texture(), real);
+#else
+        trace::log("OpenGL context: %s, GLSL \"%s\"; %s / %s; max texture %d (driver says %d)", g_gl_level->name, g_glsl_version,
+                   reinterpret_cast<const char*>(glGetString(GL_VERSION)), reinterpret_cast<const char*>(glGetString(GL_RENDERER)),
+                   glcaps::max_texture(), real);
+#endif
+    }
     g_main_window = window;
     glfwSwapInterval(g_script_mode ? 0 : 1);  // vsync (script mode: as fast as possible)
     install_input_callbacks(window);
@@ -3723,7 +3858,7 @@ int main() {
     if (g_script_mode) io.KeyRepeatDelay = 1.0e9f;
 
     ImGui_ImplGlfw_InitForOpenGL(window, true);
-    ImGui_ImplOpenGL3_Init(kGlslVersion);
+    ImGui_ImplOpenGL3_Init(g_glsl_version);
 
     highlight_warm_up();  // parse the syntax grammars on a background thread
     const std::vector<std::string> entry_names = highlight_entry_names();
@@ -3930,6 +4065,9 @@ int main() {
     PresenterWindow presenter;
     auto presenter_open = [&] {
         ImGuiContext* main_ctx = ImGui::GetCurrentContext();
+#ifndef __ANDROID__
+        apply_gl_hints(*g_gl_level);  // (the same context kind as the main window, which it shares objects with)
+#endif
         glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
         presenter.win = glfwCreateWindow(int(1000 * dpi), int(640 * dpi), "Calligrus presenter", nullptr, window);  // (shares the GL objects)
         if (!presenter.win) return;
@@ -3964,7 +4102,7 @@ int main() {
         glfwMakeContextCurrent(presenter.win);
         glfwSwapInterval(0);  // (the main window waits for vsync already)
         ImGui_ImplGlfw_InitForOpenGL(presenter.win, false);
-        ImGui_ImplOpenGL3_Init(kGlslVersion);
+        ImGui_ImplOpenGL3_Init(g_glsl_version);
         glfwMakeContextCurrent(window);
         ImGui::SetCurrentContext(main_ctx);
     };
@@ -4725,7 +4863,7 @@ int main() {
                 if (offscreen.w <= 0 || !pg.on || pg.ends.empty()) return script_fail(c, "no page to shoot");
                 const int w = offscreen.w, h = offscreen.h;
                 std::vector<unsigned char> px(size_t(w) * h * 4);
-                offscreen.bind_fb(Offscreen::kFramebuffer, offscreen.fbo);
+                offscreen.bind();
                 glPixelStorei(GL_PACK_ALIGNMENT, 1);
                 glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
                 export_pages.push_back({w, h, pdf::rgb_from_gl_rgba(px, w, h), pg.paper_w, pg.paper_h});
@@ -4740,7 +4878,7 @@ int main() {
                 if (export_pdf) {  // keep the picture for the PDF
                     const int w = offscreen.w, h = offscreen.h;
                     std::vector<unsigned char> px(size_t(w) * h * 4);
-                    offscreen.bind_fb(Offscreen::kFramebuffer, offscreen.fbo);
+                    offscreen.bind();
                     glPixelStorei(GL_PACK_ALIGNMENT, 1);
                     glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
                     export_pages.push_back({w, h, pdf::rgb_from_gl_rgba(px, w, h)});
@@ -4753,7 +4891,7 @@ int main() {
                 fs::create_directories(file.parent_path(), e);
                 const int w = offscreen.w, h = offscreen.h;
                 std::vector<unsigned char> px(size_t(w) * h * 4);
-                offscreen.bind_fb(Offscreen::kFramebuffer, offscreen.fbo);
+                offscreen.bind();
                 glPixelStorei(GL_PACK_ALIGNMENT, 1);
                 glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
                 std::ofstream out(file, std::ios::binary);
@@ -4859,9 +4997,10 @@ int main() {
         }
     };
     if (g_script_mode) {
+        offscreen.win = window;
         if (!offscreen.load()) {
-            script_log("OpenGL framebuffer objects are not available", true);
-            return 1;
+            offscreen.direct = true;
+            script_log("OpenGL framebuffer objects are not available: frames are drawn into the hidden window itself (it must be able to have the script's size)");
         }
         io.AddFocusEvent(true);
         settling = true;  // start-up frames (fonts, layout) before the first command
@@ -5814,7 +5953,7 @@ int main() {
         if (g_script_mode) {
             w = int(io.DisplaySize.x), h = int(io.DisplaySize.y);
             if (!offscreen.use(w, h)) {
-                script_log("offscreen framebuffer is incomplete", true);
+                script_log(offscreen.direct ? "the hidden window cannot be the script's size" : "offscreen framebuffer is incomplete", true);
                 script_exit = 1;
                 break;
             }
